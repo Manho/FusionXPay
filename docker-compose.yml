@@ -1,0 +1,57 @@
+version: "3.8"
+
+services:
+  # Eureka Server
+  eurekaserver:
+    build: ../eurekaserver  # Adjust the path if your Eureka Server Dockerfile is in a different folder
+    ports:
+      - "8761:8761"
+    environment:
+      # (Optional) Add environment variables if needed
+      SPRING_PROFILES_ACTIVE: docker
+
+  # MySQL for Order Service (and possibly Payment Service)
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: fusionxpay_db
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./mysql-init:/docker-entrypoint-initdb.d
+  # Redis
+  redis:
+    image: redis:latest
+    container_name: redis
+    ports:
+      - "6379:6379"
+
+  # ZooKeeper for Kafka
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+
+  # Kafka
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    ports:
+      - "9092:9092"
+
+volumes:
+  mysql-data:

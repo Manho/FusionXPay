@@ -1,0 +1,31 @@
+# Maven build output and temporary files
+target/
+/pom.xml.tag
+/pom.xml.releaseBackup
+/pom.xml.versionsBackup
+/pom.xml.next
+/release.properties
+/*.bak  # 备份文件（Maven 或其他工具可能生成）
+*.lst
+*.dumpstream
+*.dump
+
+# Java class files and packaging artifacts
+*.class
+*.jar
+*.war
+*.ear
+
+# Visual Studio Code
+.vscode/
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Log files
+*.log
+
+# Docker-specific files (if any temporary overrides)
+docker-compose.override.yml
+docker-compose.*.yml
