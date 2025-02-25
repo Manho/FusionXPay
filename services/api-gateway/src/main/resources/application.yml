@@ -12,21 +12,21 @@ spring:
         - id: payment-service
           uri: lb://payment-service
           predicates:
-            - Path=/api/payment/**
+            - Path=/payment-service/**
           filters:
-            - StripPrefix=2
+            - StripPrefix=1
         - id: order-service
           uri: lb://order-service
           predicates:
-            - Path=/api/order/**
+            - Path=/order-service/**
           filters:
-            - StripPrefix=2
+            - StripPrefix=1
         - id: notification-service
           uri: lb://notification-service
           predicates:
-            - Path=/api/notification/**
+            - Path=/notification-service/**
           filters:
-            - StripPrefix=2
+            - StripPrefix=1
 
 eureka:
   client:
