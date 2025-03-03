@@ -6,28 +6,40 @@ spring:
     name: api-gateway
   main:
     web-application-type: reactive
+  datasource:
+    url: jdbc:mysql://localhost:3306/fusionxpay_db?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC
+    username: root
+    password: root
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
   cloud:
     gateway:
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
       routes:
-        - id: payment-service
-          uri: lb://payment-service
-          predicates:
-            - Path=/payment-service/**
-          filters:
-            - StripPrefix=1
         - id: order-service
           uri: lb://order-service
           predicates:
             - Path=/order-service/**
           filters:
-            - StripPrefix=1
+            - RewritePath=/order-service/(?<segment>.*), /api/${segment}
+        - id: payment-service
+          uri: lb://payment-service
+          predicates:
+            - Path=/payment-service/**
+          filters:
+            - RewritePath=/payment-service/(?<segment>.*), /api/${segment}
         - id: notification-service
           uri: lb://notification-service
           predicates:
             - Path=/notification-service/**
           filters:
-            - StripPrefix=1
-
+            - RewritePath=/notification-service/(?<segment>.*), /api/${segment}
 eureka:
   client:
     service-url:
@@ -37,4 +49,17 @@ eureka:
 
 logging:
   level:
-    org.springframework.cloud.gateway: DEBUG
+    com.fusionxpay.api.gateway: TRACE
+    com.fusionxpay: DEBUG
+    org.springframework.cloud.gateway: TRACE
+    org.springframework.http.server.reactive: DEBUG
+    org.springframework.web.reactive: DEBUG
+    org.springframework.web: TRACE
+    org.springframework.security: TRACE
+    reactor.netty: DEBUG
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: configprops, env

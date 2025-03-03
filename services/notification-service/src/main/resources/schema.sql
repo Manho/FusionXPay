@@ -1,6 +1,5 @@
-DROP TABLE IF EXISTS notification_message;
 
-CREATE TABLE notification_message (
+CREATE TABLE IF NOT EXISTS notification_message (
     id BIGINT NOT NULL AUTO_INCREMENT,
     content TEXT,
     recipient VARCHAR(255),

@@ -1,9 +1,5 @@
-
--- Drop the table if it already exists
-DROP TABLE IF EXISTS payment_transactions;
-
 -- Create the payment_transactions table based on the PaymentTransaction entity
-CREATE TABLE payment_transactions (
+CREATE TABLE IF NOT EXISTS payment_transactions (
     transactionId CHAR(36) NOT NULL,
     orderId CHAR(36) NOT NULL,
     amount DECIMAL(10,2) NOT NULL,

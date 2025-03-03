@@ -1,8 +1,7 @@
 
 
-DROP TABLE IF EXISTS orders;
 
-CREATE TABLE orders (
+CREATE TABLE IF NOT EXISTS orders (
     id BIGINT NOT NULL AUTO_INCREMENT,
     orderNumber VARCHAR(255) NOT NULL,
     userId BIGINT,

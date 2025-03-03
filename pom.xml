@@ -12,7 +12,6 @@
 
     <modules>
         <module>services/api-gateway</module>
-        <module>services/common</module>
         <module>services/order-service</module>
         <module>services/payment-service</module>
         <module>services/notification-service</module>
