@@ -19,6 +19,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -48,7 +49,7 @@ class OrderServiceTest {
                 .build();
 
         order = Order.builder()
-                .id(1L)
+                .orderId(UUID.randomUUID())
                 .orderNumber("ORD-12345678")
                 .userId(1L)
                 .amount(new BigDecimal("100.00"))
@@ -66,12 +67,10 @@ class OrderServiceTest {
         when(orderRepository.save(any(Order.class))).thenReturn(order);
         doNothing().when(eventPublisher).publishOrderEvent(any(OrderEvent.class));
 
-        // Act
         OrderResponse response = orderService.createOrder(orderRequest);
 
-        // Assert
         assertNotNull(response);
-        assertEquals(order.getId(), response.getId());
+        assertEquals(order.getOrderId(), response.getOrderId());
         assertEquals(order.getOrderNumber(), response.getOrderNumber());
         assertEquals(order.getUserId(), response.getUserId());
         assertEquals(order.getAmount(), response.getAmount());
@@ -91,26 +90,26 @@ class OrderServiceTest {
     @Test
     @DisplayName("Test getOrderById success")
     void getOrderById_Success() {
-        when(orderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(orderRepository.findById(order.getOrderId())).thenReturn(Optional.of(order));
 
-        OrderResponse response = orderService.getOrderById(order.getId());
+        OrderResponse response = orderService.getOrderById(order.getOrderId());
 
         assertNotNull(response);
-        assertEquals(order.getId(), response.getId());
-        verify(orderRepository).findById(order.getId());
+        assertEquals(order.getOrderId(), response.getOrderId());
+        verify(orderRepository).findById(order.getOrderId());
     }
 
     @Test
     @DisplayName("Test getOrderById not found")
     void getOrderById_NotFound() {
-        Long nonExistentId = 999L;
+        UUID nonExistentId = UUID.randomUUID();
         when(orderRepository.findById(nonExistentId)).thenReturn(Optional.empty());
 
         Exception exception = assertThrows(OrderNotFoundException.class, () ->
             orderService.getOrderById(nonExistentId)
         );
 
-        assertTrue(exception.getMessage().contains("Order not found with ID"));
+        assertTrue(exception.getMessage().contains("Order not found with orderId"));
     }
 
     @Test

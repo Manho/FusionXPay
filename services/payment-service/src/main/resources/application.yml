@@ -21,6 +21,25 @@ spring:
     port: 6379
   kafka:
     bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+# Kafka topics configuration
+kafka:
+  topics:
+    payment-events: payment-events
+
+# Payment provider configurations
+payment:
+  providers:
+    stripe:
+      secret-key: sk_test_51MxSampleStripeKey
+      webhook-secret: whsec_SampleStripeWebhookSecret
+    paypal:
+      client-id: AZSamplePayPalClientId
+      client-secret: EFSamplePayPalClientSecret
+      webhook-id: WH-SamplePayPalWebhookId
 
 resilience4j:
   circuitbreaker:
@@ -29,6 +48,8 @@ resilience4j:
         registerHealthIndicator: true
         failureRateThreshold: 50
         minimumNumberOfCalls: 5
+        waitDurationInOpenState: 30s
+        permittedNumberOfCallsInHalfOpenState: 3
 
 feign:
   client:
@@ -48,3 +69,4 @@ eureka:
 logging:
   level:
     com.fusionxpay.payment.service: DEBUG
+    org.springframework.kafka: INFO

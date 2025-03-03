@@ -1,5 +1,6 @@
-package com.fusionxpay.order.dto;
+package com.fusionxpay.payment.dto;
 
+import com.fusionxpay.payment.model.PaymentStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -13,13 +14,15 @@ import java.util.UUID;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class OrderResponse {
+public class PaymentResponse {
+    private UUID transactionId;
     private UUID orderId;
-    private String orderNumber;
-    private Long userId;
     private BigDecimal amount;
     private String currency;
-    private String status;
+    private String paymentChannel;
+    private PaymentStatus status;
+    private String redirectUrl;
+    private String errorMessage;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

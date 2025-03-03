@@ -25,6 +25,7 @@ Thumbs.db
 
 # Log files
 *.log
+config.json
 
 # Docker-specific files (if any temporary overrides)
 docker-compose.override.yml

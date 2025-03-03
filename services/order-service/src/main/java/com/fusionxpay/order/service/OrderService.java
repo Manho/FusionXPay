@@ -47,7 +47,7 @@ public class OrderService {
                 .build();
         
         Order savedOrder = orderRepository.save(order);
-        log.info("Order created successfully with ID: {} and number: {}", savedOrder.getId(), savedOrder.getOrderNumber());
+        log.info("Order created successfully with orderId: {} and number: {}", savedOrder.getOrderId(), savedOrder.getOrderNumber());
         
         // Publish order created event
         publishOrderCreatedEvent(savedOrder);
@@ -57,11 +57,11 @@ public class OrderService {
 
     @Transactional(readOnly = true)
     @CircuitBreaker(name = "orderService", fallbackMethod = "getOrderByIdFallback")
-    public OrderResponse getOrderById(Long orderId) {
-        log.info("Fetching order with ID: {}", orderId);
+    public OrderResponse getOrderById(UUID orderId) {
+        log.info("Fetching order with orderId: {}", orderId);
         
         Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new OrderNotFoundException("Order not found with ID: " + orderId));
+                .orElseThrow(() -> new OrderNotFoundException("Order not found with orderId: " + orderId));
         
         return mapToOrderResponse(order);
     }
@@ -105,8 +105,8 @@ public class OrderService {
                 .build();
     }
     
-    private OrderResponse getOrderByIdFallback(Long orderId, Exception ex) {
-        log.error("Fallback: Failed to fetch order with ID: {} due to: {}", orderId, ex.getMessage());
+    private OrderResponse getOrderByIdFallback(UUID orderId, Exception ex) {
+        log.error("Fallback: Failed to fetch order with orderId: {} due to: {}", orderId, ex.getMessage());
         return OrderResponse.builder()
                 .status("ERROR")
                 .build();
@@ -138,7 +138,7 @@ public class OrderService {
     
     private OrderResponse mapToOrderResponse(Order order) {
         return OrderResponse.builder()
-                .id(order.getId())
+                .orderId(order.getOrderId())
                 .orderNumber(order.getOrderNumber())
                 .userId(order.getUserId())
                 .amount(order.getAmount())
