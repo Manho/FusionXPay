@@ -40,6 +40,7 @@ spring:
             - Path=/notification-service/**
           filters:
             - RewritePath=/notification-service/(?<segment>.*), /api/${segment}
+
 eureka:
   client:
     service-url:
@@ -63,3 +64,11 @@ management:
     web:
       exposure:
         include: configprops, env
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operationsSorter: method
+    disable-swagger-default-url: true

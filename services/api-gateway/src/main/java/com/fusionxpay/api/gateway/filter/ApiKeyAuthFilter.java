@@ -31,9 +31,13 @@ public class ApiKeyAuthFilter implements GlobalFilter, Ordered {
             values.forEach(value -> log.info("Header: {} = {}", name, value));
         });
 
-        if (path.startsWith("/auth/")) {
-            log.info("Bypassing API key validation for endpoint: {}", path);
-            return chain.filter(exchange);
+        if (path.startsWith("/auth/") ||
+            path.startsWith("/swagger-ui/") ||
+            path.startsWith("/v3/api-docs") ||
+            path.startsWith("/swagger-resources") ||
+            path.startsWith("/webjars/")) {
+                log.info("Bypassing API key validation for endpoint: {}", path);
+                return chain.filter(exchange);
         }
 
         // Get the API key from the header
