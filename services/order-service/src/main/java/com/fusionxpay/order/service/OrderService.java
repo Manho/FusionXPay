@@ -76,6 +76,7 @@ public class OrderService {
         return mapToOrderResponse(order);
     }
 
+
     @Transactional
     public OrderResponse updateOrderStatus(String orderNumber, String newStatus) {
         log.info("Updating order status for order number: {} to: {}", orderNumber, newStatus);
@@ -150,17 +151,22 @@ public class OrderService {
     }
     
     private void publishOrderCreatedEvent(Order order) {
-        OrderEvent event = OrderEvent.builder()
-                .eventType("ORDER_CREATED")
-                .orderNumber(order.getOrderNumber())
-                .userId(order.getUserId())
-                .amount(order.getAmount())
-                .currency(order.getCurrency())
-                .status(order.getStatus())
-                .timestamp(LocalDateTime.now())
-                .build();
-        
-        eventPublisher.publishOrderEvent(event);
+        try {
+            OrderEvent event = OrderEvent.builder()
+                    .eventType("ORDER_CREATED")
+                    .orderNumber(order.getOrderNumber())
+                    .userId(order.getUserId())
+                    .amount(order.getAmount())
+                    .currency(order.getCurrency())
+                    .status(order.getStatus())
+                    .timestamp(LocalDateTime.now())
+                    .build();
+            
+            eventPublisher.publishOrderEvent(event);
+        } catch (Exception e) {
+            log.error("Failed to publish order created event for order: {}", order.getOrderNumber(), e);
+            throw new RuntimeException("Failed to publish order event", e); 
+        }
     }
     
     private void publishOrderUpdatedEvent(Order order) {
