@@ -11,6 +11,7 @@
     <name>FusionXPay Parent</name>
 
     <modules>
+        <module>common</module>
         <module>services/api-gateway</module>
         <module>services/order-service</module>
         <module>services/payment-service</module>
@@ -21,6 +22,7 @@
         <java.version>17</java.version>
         <spring-boot.version>3.2.0</spring-boot.version>
         <spring-cloud.version>2023.0.0</spring-cloud.version>
+        <common-module.version>1.0.0</common-module.version> 
     </properties>
 
     <dependencyManagement>

@@ -33,7 +33,7 @@ Below is a conceptual diagram incorporating enterprise requirements such as end-
 ### 3.1 API Gateway
 - **Tech**: Spring Cloud Gateway
 - **Responsibilities**:
-  - Routes external requests (e.g., `/api/orders`, `/api/payment/request/{orderId}`, `/api/payment/callback`) to internal services.
+  - Routes external requests (e.g., `/api/orders`, `/api/payment/request`, `/api/payment/callback`) to internal services.
   - Implements rate-limiting, authentication, and IP whitelisting.
   - Logs request metadata for audits (request time, user ID, correlation ID).
 
@@ -49,7 +49,7 @@ Below is a conceptual diagram incorporating enterprise requirements such as end-
 
 ### 3.3 Payment Service
 - **Endpoints**:
-  - `POST /api/payment/request/{orderId}` – Initiates payment for a specific order.
+  - `POST /api/payment/request` – Initiates payment for a specific order.
   - `POST /api/payment/callback` – Processes asynchronous notifications from payment providers.
 - **Functionality**:
   - Integrates with external payment APIs using Strategy/Adapter pattern.

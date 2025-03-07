@@ -55,7 +55,7 @@
 
 2. **Payment Request Module**
     
-    - **Endpoint:** `POST /api/payment/request/{orderId}`
+    - **Endpoint:** `POST /api/payment/request`
     - **Inputs:** Order ID and payment method details.
     - **Process:** 
       1. Send message to Order Service to update order status to `PROCESSING`.
@@ -169,7 +169,7 @@
     - **Request Body:** JSON with order amount, currency, and other details.
     - **Response:** JSON containing `orderId`, `status`, and any additional metadata.
 
-- **Payment Initiation API**: `POST /api/payment/request/{orderId}`
+- **Payment Initiation API**: `POST /api/payment/request`
     
     - **Request Body:** JSON with payment method details.
     - **Response:** JSON confirmation of payment initiation.

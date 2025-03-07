@@ -4,7 +4,7 @@ import com.fusionxpay.payment.dto.PaymentCallbackRequest;
 import com.fusionxpay.payment.dto.PaymentRequest;
 import com.fusionxpay.payment.dto.PaymentResponse;
 import com.fusionxpay.payment.event.OrderEventProducer;
-import com.fusionxpay.payment.model.PaymentStatus;
+import com.fusionxpay.common.model.PaymentStatus;
 import com.fusionxpay.payment.model.PaymentTransaction;
 import com.fusionxpay.payment.provider.PaymentProvider;
 import com.fusionxpay.payment.provider.PaymentProviderFactory;

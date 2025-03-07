@@ -1,6 +1,6 @@
 package com.fusionxpay.payment.dto;
 
-import com.fusionxpay.payment.model.PaymentStatus;
+import com.fusionxpay.common.model.PaymentStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

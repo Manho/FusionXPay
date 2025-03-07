@@ -3,7 +3,6 @@ package com.fusionxpay.api.gateway.controller;
 import com.fusionxpay.api.gateway.dto.AuthRequest;
 import com.fusionxpay.api.gateway.dto.AuthResponse;
 import com.fusionxpay.api.gateway.service.UserService;
-import com.fusionxpay.common.dto.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -24,45 +23,27 @@ public class AuthController {
 
     @Operation(summary = "Register a new user", description = "Creates a new user account and returns an authentication response with API key")
     @PostMapping("/register")
-    public ResponseEntity<ApiResponse<AuthResponse>> register(@Valid @RequestBody AuthRequest request) {
+    public ResponseEntity<AuthResponse> register(@Valid @RequestBody AuthRequest request) {
         try {
             AuthResponse response = userService.register(request);
             log.info("User [{}] registered successfully", response.getUsername());
-            ApiResponse<AuthResponse> apiResponse = ApiResponse.<AuthResponse>builder()
-                    .code(200)
-                    .message("Success")
-                    .data(response)
-                    .build();
-            return ResponseEntity.status(HttpStatus.CREATED).body(apiResponse);
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
         } catch (Exception ex) {
             log.error("Registration failed: {}", ex.getMessage(), ex);
-            ApiResponse<AuthResponse> apiResponse = ApiResponse.<AuthResponse>builder()
-                    .code(HttpStatus.BAD_REQUEST.value())
-                    .message(ex.getMessage())
-                    .build();
-            return ResponseEntity.badRequest().body(apiResponse);
+            return ResponseEntity.badRequest().body(null);
         }
     }
 
     @Operation(summary = "User login", description = "Authenticates an existing user and returns their API key")
     @PostMapping("/login")
-    public ResponseEntity<ApiResponse<AuthResponse>> login(@Valid @RequestBody AuthRequest request) {
+    public ResponseEntity<AuthResponse> login(@Valid @RequestBody AuthRequest request) {
         try {
             AuthResponse response = userService.login(request);
             log.info("User [{}] logged in successfully", response.getUsername());
-            ApiResponse<AuthResponse> apiResponse = ApiResponse.<AuthResponse>builder()
-                    .code(200)
-                    .message("Success")
-                    .data(response)
-                    .build();
-            return ResponseEntity.status(HttpStatus.OK).body(apiResponse);
+            return ResponseEntity.status(HttpStatus.OK).body(response);
         } catch (Exception ex) {
             log.error("Login failed: {}", ex.getMessage(), ex);
-            ApiResponse<AuthResponse> apiResponse = ApiResponse.<AuthResponse>builder()
-                    .code(HttpStatus.BAD_REQUEST.value())
-                    .message(ex.getMessage())
-                    .build();
-            return ResponseEntity.badRequest().body(apiResponse);
+            return ResponseEntity.badRequest().body(null);
         }
     }
 }

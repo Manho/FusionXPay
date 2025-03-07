@@ -2,8 +2,6 @@ package com.fusionxpay.order.service;
 
 import com.fusionxpay.order.dto.OrderRequest;
 import com.fusionxpay.order.dto.OrderResponse;
-import com.fusionxpay.order.event.OrderEvent;
-import com.fusionxpay.order.event.OrderEventPublisher;
 import com.fusionxpay.order.exception.OrderNotFoundException;
 import com.fusionxpay.order.model.Order;
 import com.fusionxpay.order.repository.OrderRepository;
@@ -11,7 +9,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -30,9 +27,6 @@ class OrderServiceTest {
 
     @Mock
     private OrderRepository orderRepository;
-
-    @Mock
-    private OrderEventPublisher eventPublisher;
 
     @InjectMocks
     private OrderService orderService;
@@ -65,7 +59,6 @@ class OrderServiceTest {
     void createOrder_Success() {
         // Arrange
         when(orderRepository.save(any(Order.class))).thenReturn(order);
-        doNothing().when(eventPublisher).publishOrderEvent(any(OrderEvent.class));
 
         OrderResponse response = orderService.createOrder(orderRequest);
 
@@ -78,13 +71,6 @@ class OrderServiceTest {
         assertEquals(order.getStatus(), response.getStatus());
         assertNotNull(response.getCreatedAt());
         assertNotNull(response.getUpdatedAt());
-
-        // Verify event publication using ArgumentCaptor
-        ArgumentCaptor<OrderEvent> eventCaptor = ArgumentCaptor.forClass(OrderEvent.class);
-        verify(eventPublisher).publishOrderEvent(eventCaptor.capture());
-        OrderEvent capturedEvent = eventCaptor.getValue();
-        assertEquals("ORDER_CREATED", capturedEvent.getEventType());
-        assertEquals(order.getOrderNumber(), capturedEvent.getOrderNumber());
     }
 
     @Test
@@ -130,18 +116,11 @@ class OrderServiceTest {
         // Given the order is in NEW state, a valid transition is to PROCESSING
         when(orderRepository.findByOrderNumber(order.getOrderNumber())).thenReturn(Optional.of(order));
         when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        doNothing().when(eventPublisher).publishOrderEvent(any(OrderEvent.class));
 
         OrderResponse response = orderService.updateOrderStatus(order.getOrderNumber(), OrderService.PROCESSING);
 
         assertNotNull(response);
         assertEquals(OrderService.PROCESSING, response.getStatus());
-
-        // Verify that an update event is published
-        ArgumentCaptor<OrderEvent> eventCaptor = ArgumentCaptor.forClass(OrderEvent.class);
-        verify(eventPublisher).publishOrderEvent(eventCaptor.capture());
-        OrderEvent capturedEvent = eventCaptor.getValue();
-        assertEquals("ORDER_UPDATED", capturedEvent.getEventType());
     }
 
     @Test
@@ -167,5 +146,44 @@ class OrderServiceTest {
         );
 
         assertTrue(exception.getMessage().contains("Order not found with number"));
+    }
+
+    @Test
+    @DisplayName("Test updateOrderStatusById success with valid transition")
+    void updateOrderStatusById_Success() {
+        // Given the order is in NEW state, a valid transition is to PROCESSING
+        when(orderRepository.findById(order.getOrderId())).thenReturn(Optional.of(order));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        OrderResponse response = orderService.updateOrderStatusById(order.getOrderId(), OrderService.PROCESSING, "Payment processing");
+
+        assertNotNull(response);
+        assertEquals(OrderService.PROCESSING, response.getStatus());
+    }
+
+    @Test
+    @DisplayName("Test updateOrderStatusById with invalid transition")
+    void updateOrderStatusById_InvalidTransition() {
+        // Given the order is in NEW state, an invalid transition should throw an exception
+        when(orderRepository.findById(order.getOrderId())).thenReturn(Optional.of(order));
+
+        Exception exception = assertThrows(IllegalStateException.class, () ->
+            orderService.updateOrderStatusById(order.getOrderId(), OrderService.SUCCESS, "Direct to success")
+        );
+
+        assertTrue(exception.getMessage().contains("Invalid status transition"));
+    }
+
+    @Test
+    @DisplayName("Test updateOrderStatusById order not found")
+    void updateOrderStatusById_OrderNotFound() {
+        UUID nonExistentId = UUID.randomUUID();
+        when(orderRepository.findById(nonExistentId)).thenReturn(Optional.empty());
+
+        Exception exception = assertThrows(OrderNotFoundException.class, () ->
+            orderService.updateOrderStatusById(nonExistentId, OrderService.PROCESSING, "Processing message")
+        );
+
+        assertTrue(exception.getMessage().contains("Order not found with orderId"));
     }
 }

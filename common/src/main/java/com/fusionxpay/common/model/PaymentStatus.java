@@ -1,4 +1,4 @@
-package com.fusionxpay.payment.model;
+package com.fusionxpay.common.model;
 
 public enum PaymentStatus {
     INITIATED,

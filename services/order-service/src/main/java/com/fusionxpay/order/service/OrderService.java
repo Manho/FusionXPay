@@ -2,8 +2,6 @@ package com.fusionxpay.order.service;
 
 import com.fusionxpay.order.dto.OrderRequest;
 import com.fusionxpay.order.dto.OrderResponse;
-import com.fusionxpay.order.event.OrderEvent;
-import com.fusionxpay.order.event.OrderEventPublisher;
 import com.fusionxpay.order.exception.OrderNotFoundException;
 import com.fusionxpay.order.model.Order;
 import com.fusionxpay.order.repository.OrderRepository;
@@ -13,7 +11,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Service
@@ -22,7 +19,6 @@ import java.util.UUID;
 public class OrderService {
 
     private final OrderRepository orderRepository;
-    private final OrderEventPublisher eventPublisher;
 
     public static final String NEW = "NEW";
     public static final String PROCESSING = "PROCESSING";
@@ -49,9 +45,6 @@ public class OrderService {
         Order savedOrder = orderRepository.save(order);
         log.info("Order created successfully with orderId: {} and number: {}", savedOrder.getOrderId(), savedOrder.getOrderNumber());
         
-        // Publish order created event
-        publishOrderCreatedEvent(savedOrder);
-        
         return mapToOrderResponse(savedOrder);
     }
 
@@ -76,7 +69,6 @@ public class OrderService {
         return mapToOrderResponse(order);
     }
 
-
     @Transactional
     public OrderResponse updateOrderStatus(String orderNumber, String newStatus) {
         log.info("Updating order status for order number: {} to: {}", orderNumber, newStatus);
@@ -91,8 +83,22 @@ public class OrderService {
         order.setStatus(newStatus);
         Order updatedOrder = orderRepository.save(order);
         
-        // Publish order updated event
-        publishOrderUpdatedEvent(updatedOrder);
+        return mapToOrderResponse(updatedOrder);
+    }
+
+    @Transactional
+    public OrderResponse updateOrderStatusById(UUID orderId, String newStatus, String message) {
+        log.info("Updating order status for order ID: {} to: {} with message: {}", orderId, newStatus, message);
+        
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new OrderNotFoundException("Order not found with orderId: " + orderId));
+        
+        // Validate the status transition
+        validateStatusTransition(order.getStatus(), newStatus);
+        
+        // Update the status
+        order.setStatus(newStatus);
+        Order updatedOrder = orderRepository.save(order);
         
         return mapToOrderResponse(updatedOrder);
     }
@@ -148,38 +154,5 @@ public class OrderService {
                 .createdAt(order.getCreatedAt())
                 .updatedAt(order.getUpdatedAt())
                 .build();
-    }
-    
-    private void publishOrderCreatedEvent(Order order) {
-        try {
-            OrderEvent event = OrderEvent.builder()
-                    .eventType("ORDER_CREATED")
-                    .orderNumber(order.getOrderNumber())
-                    .userId(order.getUserId())
-                    .amount(order.getAmount())
-                    .currency(order.getCurrency())
-                    .status(order.getStatus())
-                    .timestamp(LocalDateTime.now())
-                    .build();
-            
-            eventPublisher.publishOrderEvent(event);
-        } catch (Exception e) {
-            log.error("Failed to publish order created event for order: {}", order.getOrderNumber(), e);
-            throw new RuntimeException("Failed to publish order event", e); 
-        }
-    }
-    
-    private void publishOrderUpdatedEvent(Order order) {
-        OrderEvent event = OrderEvent.builder()
-                .eventType("ORDER_UPDATED")
-                .orderNumber(order.getOrderNumber())
-                .userId(order.getUserId())
-                .amount(order.getAmount())
-                .currency(order.getCurrency())
-                .status(order.getStatus())
-                .timestamp(LocalDateTime.now())
-                .build();
-        
-        eventPublisher.publishOrderEvent(event);
     }
 }

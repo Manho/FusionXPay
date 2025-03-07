@@ -3,7 +3,7 @@
 ### 1.1 High-Level Overview
 
 1. **Order Creation**: The merchant system calls `/api/orders` with order data. The service responds with a unique `orderId` and sets the order status to `NEW`.
-2. **Payment Initiation**: Merchant explicitly calls `/api/payment/request/{orderId}` to initiate payment for the created order.
+2. **Payment Initiation**: Merchant explicitly calls `/api/payment/request` to initiate payment for the created order.
 3. **Order Status Update**: Payment Service sends a message to the Order Service via the message queue to update the order status to `PROCESSING`.
 4. **Payment Request**: Payment Service generates a request to the selected gateway and dispatches it to the third-party provider.
 5. **Payment Gateway Processing**: The third-party provider asynchronously handles the transaction and notifies FusionXPay via a callback.
@@ -22,7 +22,7 @@
 
 #### Step 2: Payment Initiation
 
-- **User Action**: Merchant calls `/api/payment/request/{orderId}` with payment details.
+- **User Action**: Merchant calls `/api/payment/request` with payment details.
 - **System Action**: Payment Service receives request and prepares for payment processing.
 
 #### Step 3: Order Status Update to Processing

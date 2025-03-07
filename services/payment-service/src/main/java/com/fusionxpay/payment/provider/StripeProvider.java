@@ -2,7 +2,7 @@ package com.fusionxpay.payment.provider;
 
 import com.fusionxpay.payment.dto.PaymentRequest;
 import com.fusionxpay.payment.dto.PaymentResponse;
-import com.fusionxpay.payment.model.PaymentStatus;
+import com.fusionxpay.common.model.PaymentStatus;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;

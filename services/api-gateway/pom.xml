@@ -18,6 +18,7 @@
         <junit.jupiter.version>5.10.0</junit.jupiter.version>
         <spring-boot.version>3.1.2</spring-boot.version>
         <spring-cloud.version>2022.0.3</spring-cloud.version>
+        <common-module.version>1.0.0</common-module.version>
     </properties>
 
     <dependencyManagement>
@@ -71,7 +72,7 @@
         <dependency>
             <groupId>com.fusionxpay</groupId>
             <artifactId>common</artifactId>
-            <version>${project.version}</version>
+            <version>${common-module.version}</version>
         </dependency>
         <!-- JUnit 5 API and Engine for testing -->
         <dependency>

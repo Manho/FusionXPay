@@ -20,11 +20,17 @@ spring:
         format_sql: true
   kafka:
     bootstrap-servers: localhost:9092
-    producer:
-      key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    consumer:
+      group-id: order-service-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
-        spring.json.add.type.headers: false
+        spring.json.trusted.packages: com.fusionxpay.common.event
+
+kafka:
+  topics:
+    payment-events: payment-events
 
 eureka:
   client:

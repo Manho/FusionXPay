@@ -1,6 +1,6 @@
 package com.fusionxpay.payment.config;
 
-import com.fusionxpay.payment.event.OrderPaymentEvent;
+import com.fusionxpay.common.event.OrderPaymentEvent;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
