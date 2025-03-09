@@ -1,6 +1,5 @@
 package com.fusionxpay.payment.controller;
 
-import com.fusionxpay.payment.dto.PaymentCallbackRequest;
 import com.fusionxpay.payment.dto.PaymentRequest;
 import com.fusionxpay.payment.dto.PaymentResponse;
 import com.fusionxpay.payment.service.PaymentService;
@@ -9,7 +8,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -31,19 +29,6 @@ public class PaymentController {
         log.info("Payment request received: {}", paymentRequest);
         PaymentResponse response = paymentService.initiatePayment(paymentRequest);
         return ResponseEntity.ok(response);
-    }
-
-    @PostMapping("/callback")
-    @Operation(summary = "Payment callback", description = "Endpoint for payment providers to send payment status updates")
-    public ResponseEntity<Void> paymentCallback(@RequestBody PaymentCallbackRequest callbackRequest) {
-        log.info("Payment callback received: {}", callbackRequest);
-        boolean processed = paymentService.processPaymentCallback(callbackRequest);
-        
-        if (processed) {
-            return ResponseEntity.ok().build();
-        } else {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-        }
     }
 
     @GetMapping("/transaction/{transactionId}")

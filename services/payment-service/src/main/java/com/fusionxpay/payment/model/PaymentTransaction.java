@@ -30,6 +30,10 @@ public class PaymentTransaction {
     @Column(nullable = false, length = 20)
     private String status;
     
+    // Provider-specific transaction ID (e.g., Stripe session ID)
+    @Column(length = 255)
+    private String providerTransactionId;
+    
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
     

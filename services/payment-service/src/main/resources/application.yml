@@ -24,7 +24,13 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
-
+  retry:
+      enabled: true
+      maxAttempts: 3
+      maxDelay: 1000
+      initialBackoff: 100
+      multiplier: 2
+      
 # Kafka topics configuration
 kafka:
   topics:
@@ -34,12 +40,13 @@ kafka:
 payment:
   providers:
     stripe:
-      secret-key: sk_test_51MxSampleStripeKey
-      webhook-secret: whsec_SampleStripeWebhookSecret
+      enabled: true
+      secret-key: ${STRIPE_SECRET_KEY:sk_test_51MxSampleStripeKey}
+      webhook-secret: ${STRIPE_WEBHOOK_SECRET:whsec_SampleStripeWebhookSecret}
     paypal:
-      client-id: AZSamplePayPalClientId
-      client-secret: EFSamplePayPalClientSecret
-      webhook-id: WH-SamplePayPalWebhookId
+      client-id: ${PAYPAL_CLIENT_ID:ATestPaypalClientId}
+      client-secret: ${PAYPAL_CLIENT_SECRET:ATestPaypalClientSecret} 
+      webhook-id: ${PAYPAL_WEBHOOK_ID:ATestPaypalWebhookId}
 
 resilience4j:
   circuitbreaker:

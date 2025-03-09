@@ -25,4 +25,11 @@ public class PaymentResponse {
     private String errorMessage;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private String merchantReference;
+    private String providerTransactionId; // Provider-specific transaction reference
+    private boolean success;
+
+    public boolean isSuccess() {
+        return success || (status != null && (status == PaymentStatus.SUCCESS || status == PaymentStatus.PROCESSING));
+    }
 }
