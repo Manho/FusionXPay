@@ -1,0 +1,74 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+  main:
+    web-application-type: reactive
+  datasource:
+    url: jdbc:mysql://192.168.50.225:3306/fusionxpay_db?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC
+    username: root
+    password: root
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+      routes:
+        - id: order-service
+          uri: lb://order-service
+          predicates:
+            - Path=/order-service/**
+          filters:
+            - RewritePath=/order-service/(?<segment>.*), /api/${segment}
+        - id: payment-service
+          uri: lb://payment-service
+          predicates:
+            - Path=/payment-service/**
+          filters:
+            - RewritePath=/payment-service/(?<segment>.*), /api/${segment}
+        - id: notification-service
+          uri: lb://notification-service
+          predicates:
+            - Path=/notification-service/**
+          filters:
+            - RewritePath=/notification-service/(?<segment>.*), /api/${segment}
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://192.168.50.225:8761/eureka
+  instance:
+    prefer-ip-address: true
+
+logging:
+  level:
+    com.fusionxpay.api.gateway: TRACE
+    com.fusionxpay: DEBUG
+    org.springframework.cloud.gateway: TRACE
+    org.springframework.http.server.reactive: DEBUG
+    org.springframework.web.reactive: DEBUG
+    org.springframework.web: TRACE
+    org.springframework.security: TRACE
+    reactor.netty: DEBUG
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: configprops, env
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operationsSorter: method
+    disable-swagger-default-url: true

@@ -7,7 +7,7 @@
         <artifactId>fusionxpay-parent</artifactId>
         <version>1.0.0</version>
     </parent>
-    
+
     <modelVersion>4.0.0</modelVersion>
     <artifactId>api-gateway</artifactId>
     <name>API Gateway</name>
@@ -15,7 +15,7 @@
     <properties>
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
-        <junit.jupiter.version>5.10.0</junit.jupiter.version>
+        <junit.jupiter.version>5.9.3</junit.jupiter.version>
         <spring-boot.version>3.1.2</spring-boot.version>
         <spring-cloud.version>2022.0.3</spring-cloud.version>
         <common-module.version>1.0.0</common-module.version>
@@ -74,16 +74,10 @@
             <artifactId>common</artifactId>
             <version>${common-module.version}</version>
         </dependency>
-        <!-- JUnit 5 API and Engine for testing -->
+        <!-- JUnit 5 for testing -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter-api</artifactId>
-            <version>${junit.jupiter.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter-engine</artifactId>
+            <artifactId>junit-jupiter</artifactId>
             <version>${junit.jupiter.version}</version>
             <scope>test</scope>
         </dependency>
@@ -91,6 +85,12 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Reactor Test for testing reactive components -->
+        <dependency>
+            <groupId>io.projectreactor</groupId>
+            <artifactId>reactor-test</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -103,7 +103,7 @@
             <artifactId>springdoc-openapi-starter-webflux-ui</artifactId>
             <version>2.2.0</version>
         </dependency>
-        
+
     </dependencies>
 
     <build>
@@ -119,6 +119,12 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>2.22.2</version>
+                <configuration>
+                    <includes>
+                        <include>**/*Test.java</include>
+                    </includes>
+                    <failIfNoTests>false</failIfNoTests>
+                </configuration>
             </plugin>
             <!-- Maven Compiler Plugin for setting Java version -->
             <plugin>
