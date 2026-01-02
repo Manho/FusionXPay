@@ -14,8 +14,8 @@ public class SwaggerConfig {
     public OpenAPI fusionXPayOpenAPI() {
         return new OpenAPI()
                 .info(new Info()
-                        .title("FusionXPay Payment Service API")
-                        .description("API documentation for the Payment Service of FusionXPay platform")
+                        .title("FusionXPay API Gateway")
+                        .description("API documentation for the API Gateway of the FusionXPay platform")
                         .version("v1.0.0")
                         .contact(new Contact()
                                 .name("FusionXPay Support")
