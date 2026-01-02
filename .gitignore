@@ -5,7 +5,7 @@ target/
 /pom.xml.versionsBackup
 /pom.xml.next
 /release.properties
-/*.bak  # 备份文件（Maven 或其他工具可能生成）
+/*.bak
 *.lst
 *.dumpstream
 *.dump
