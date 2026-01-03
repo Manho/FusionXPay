@@ -5,9 +5,9 @@ spring:
   application:
     name: notification-service
   datasource:
-    url: jdbc:mysql://192.168.50.225:3306/fusionxpay_db?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC
-    username: root
-    password: root
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:fusionxpay_db}?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root}
     driver-class-name: com.mysql.cj.jdbc.Driver
     initialization-mode: always
   jpa:
@@ -17,10 +17,10 @@ spring:
     properties:
       hibernate.format_sql: true
   redis:
-    host: 192.168.50.225
-    port: 6379
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
   kafka:
-    bootstrap-servers: 192.168.50.225:9092
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     consumer:
       group-id: notification-service
       auto-offset-reset: earliest
@@ -52,6 +52,6 @@ feign:
 eureka:
   client:
     service-url:
-      defaultZone: http://192.168.50.225:8761/eureka
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka}
   instance:
     prefer-ip-address: true

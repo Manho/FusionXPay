@@ -163,6 +163,7 @@ FusionXPay/
 - **Service Discovery:** Eureka is used for dynamic service registration and discovery.
 - **Database Configuration:** Each service has its own configuration in `application.yml` files pointing to the MySQL database.
 - **Message Queues:** Kafka is used for asynchronous messaging, decoupling communication between services.
+- **Environment Variables:** Copy `.env.example` to `.env` and set provider keys and infrastructure endpoints used by each service.
 - **Security & Resilience:** 
   - HTTPS/TLS is enforced.
   - Resilience4j is configured for circuit breaking.
