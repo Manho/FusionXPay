@@ -26,6 +26,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -105,7 +106,8 @@ public class OrderController {
     }
 
     // Helper schema class for Swagger documentation
-    private class ErrorResponseSchema {
+    @Data
+    private static class ErrorResponseSchema {
         @Schema(description = "Error timestamp", example = "2025-03-05T12:34:56")
         private String timestamp;
         
@@ -118,20 +120,5 @@ public class OrderController {
         @Schema(description = "Error message", example = "Order not found with number: ORD-12345678")
         private String message;
         
-        public void setTimestamp(String timestamp) {
-            this.timestamp = timestamp;
-        }
-        
-        public void setStatus(int status) {
-            this.status = status;
-        }
-        
-        public void setError(String error) {
-            this.error = error;
-        }
-        
-        public void setMessage(String message) {
-            this.message = message;
-        }
     }
 }

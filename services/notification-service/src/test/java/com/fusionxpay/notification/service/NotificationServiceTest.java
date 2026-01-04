@@ -2,120 +2,109 @@ package com.fusionxpay.notification.service;
 
 import com.fusionxpay.notification.model.NotificationMessage;
 import com.fusionxpay.notification.repository.NotificationRepository;
-
-import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
 
 import java.time.LocalDateTime;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
 
+@SpringBootTest
 class NotificationServiceTest {
 
-    // Assume we have a concrete implementation called NotificationServiceImpl
-    @InjectMocks
-    private NotificationServiceImpl notificationService;
+    @Autowired
+    private NotificationService notificationService;
 
-    // Mock any dependencies the implementation might have
-    @Mock
+    @Autowired
     private NotificationRepository notificationRepository;
 
-    @BeforeEach
-    void setUp() {
-        MockitoAnnotations.openMocks(this);
+    @AfterEach
+    void tearDown() {
+        notificationRepository.deleteAll();
     }
 
     @Test
+    @DisplayName("Create notification persists message")
     void testCreateNotification() {
-        // Arrange
         NotificationMessage message = NotificationMessage.builder()
                 .orderId(UUID.randomUUID().toString())
                 .content("Test notification")
+                .recipient("user@example.com")
                 .createdAt(LocalDateTime.now())
                 .build();
 
-        // Act
         notificationService.createNotification(message);
 
-        // Assert
-        verify(notificationRepository, times(1)).save(message);
+        List<NotificationMessage> saved = notificationRepository.findAll();
+        assertEquals(1, saved.size());
+        assertEquals("Test notification", saved.get(0).getContent());
     }
 
     @Test
+    @DisplayName("Get all notifications returns stored messages")
     void testGetAllNotifications() {
-        // Arrange
         NotificationMessage message1 = NotificationMessage.builder()
-                .id(1L)
+                .orderId(UUID.randomUUID().toString())
                 .content("Notification 1")
+                .recipient("user1@example.com")
                 .build();
 
         NotificationMessage message2 = NotificationMessage.builder()
-                .id(2L)
+                .orderId(UUID.randomUUID().toString())
                 .content("Notification 2")
+                .recipient("user2@example.com")
                 .build();
 
-        List<NotificationMessage> expectedNotifications = Arrays.asList(message1, message2);
-        when(notificationRepository.findAll()).thenReturn(expectedNotifications);
+        notificationRepository.save(message1);
+        notificationRepository.save(message2);
 
-        // Act
         List<NotificationMessage> actualNotifications = notificationService.getAllNotifications();
 
-        // Assert
-        assertEquals(expectedNotifications, actualNotifications);
-        verify(notificationRepository, times(1)).findAll();
+        assertEquals(2, actualNotifications.size());
     }
 
     @Test
+    @DisplayName("Get notification by ID returns message")
     void testGetNotificationById_WhenExists() {
-        // Arrange
-        Long id = 1L;
         NotificationMessage message = NotificationMessage.builder()
-                .id(id)
+                .orderId(UUID.randomUUID().toString())
                 .content("Test notification")
+                .recipient("user@example.com")
                 .build();
 
-        when(notificationRepository.findById(id)).thenReturn(Optional.of(message));
+        NotificationMessage saved = notificationRepository.save(message);
 
-        // Act
-        Optional<NotificationMessage> result = notificationService.getNotificationById(id);
+        Optional<NotificationMessage> result = notificationService.getNotificationById(saved.getId());
 
-        // Assert
         assertTrue(result.isPresent());
-        assertEquals(message, result.get());
-        verify(notificationRepository, times(1)).findById(id);
+        assertEquals(saved.getId(), result.get().getId());
     }
 
     @Test
+    @DisplayName("Get notification by ID returns empty when missing")
     void testGetNotificationById_WhenNotExists() {
-        // Arrange
-        Long id = 99L;
-        when(notificationRepository.findById(id)).thenReturn(Optional.empty());
-
-        // Act
-        Optional<NotificationMessage> result = notificationService.getNotificationById(id);
-
-        // Assert
+        Optional<NotificationMessage> result = notificationService.getNotificationById(999L);
         assertFalse(result.isPresent());
-        verify(notificationRepository, times(1)).findById(id);
     }
 
     @Test
+    @DisplayName("Delete notification removes record")
     void testDeleteNotification() {
-        // Arrange
-        Long id = 1L;
+        NotificationMessage message = NotificationMessage.builder()
+                .orderId(UUID.randomUUID().toString())
+                .content("Delete me")
+                .recipient("user@example.com")
+                .build();
 
-        // Act
-        notificationService.deleteNotification(id);
+        NotificationMessage saved = notificationRepository.save(message);
+        notificationService.deleteNotification(saved.getId());
 
-        // Assert
-        verify(notificationRepository, times(1)).deleteById(id);
+        assertFalse(notificationRepository.findById(saved.getId()).isPresent());
     }
 }

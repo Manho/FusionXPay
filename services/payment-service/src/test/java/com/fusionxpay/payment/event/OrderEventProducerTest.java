@@ -11,6 +11,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -42,6 +43,8 @@ class OrderEventProducerTest {
         UUID orderId = UUID.randomUUID();
         UUID transactionId = UUID.randomUUID();
         PaymentStatus status = PaymentStatus.SUCCESS;
+
+        ReflectionTestUtils.setField(orderEventProducer, "paymentEventsTopic", "payment-events");
         
         when(kafkaTemplate.send(any(), any(), any())).thenReturn(completableFuture);
         

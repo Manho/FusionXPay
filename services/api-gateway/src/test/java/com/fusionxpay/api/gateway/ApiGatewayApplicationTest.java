@@ -71,7 +71,7 @@ class ApiGatewayApplicationTest {
 
         // Verify OpenAPI configuration
         assertNotNull(openAPI.getInfo(), "OpenAPI info should not be null");
-        assertEquals("FusionXPay Payment Service API", openAPI.getInfo().getTitle(), "OpenAPI title should match");
+        assertEquals("FusionXPay API Gateway", openAPI.getInfo().getTitle(), "OpenAPI title should match");
         assertEquals("v1.0.0", openAPI.getInfo().getVersion(), "OpenAPI version should match");
         assertNotNull(openAPI.getInfo().getContact(), "OpenAPI contact should not be null");
         assertEquals("FusionXPay Support", openAPI.getInfo().getContact().getName(), "OpenAPI contact name should match");

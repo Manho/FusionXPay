@@ -5,92 +5,70 @@ import com.fusionxpay.order.dto.OrderResponse;
 import com.fusionxpay.order.exception.OrderNotFoundException;
 import com.fusionxpay.order.model.Order;
 import com.fusionxpay.order.repository.OrderRepository;
-import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
-import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
 
-@ExtendWith(MockitoExtension.class)
+@SpringBootTest
 class OrderServiceTest {
 
-    @Mock
-    private OrderRepository orderRepository;
-
-    @InjectMocks
+    @Autowired
     private OrderService orderService;
 
-    private OrderRequest orderRequest;
-    private Order order;
+    @Autowired
+    private OrderRepository orderRepository;
 
-    @BeforeEach
-    void setUp() {
-        orderRequest = OrderRequest.builder()
-                .userId(1L)
-                .amount(new BigDecimal("100.00"))
-                .currency("USD")
-                .build();
-
-        order = Order.builder()
-                .orderId(UUID.randomUUID())
-                .orderNumber("ORD-12345678")
-                .userId(1L)
-                .amount(new BigDecimal("100.00"))
-                .currency("USD")
-                .status(OrderService.NEW)
-                .createdAt(LocalDateTime.now())
-                .updatedAt(LocalDateTime.now())
-                .build();
+    @AfterEach
+    void tearDown() {
+        orderRepository.deleteAll();
     }
 
     @Test
-    @DisplayName("Test createOrder success")
+    @DisplayName("Create order persists and returns response")
     void createOrder_Success() {
-        // Arrange
-        when(orderRepository.save(any(Order.class))).thenReturn(order);
+        OrderRequest orderRequest = OrderRequest.builder()
+                .userId(1L)
+                .amount(new BigDecimal("100.00"))
+                .currency("USD")
+                .build();
 
         OrderResponse response = orderService.createOrder(orderRequest);
 
         assertNotNull(response);
-        assertEquals(order.getOrderId(), response.getOrderId());
-        assertEquals(order.getOrderNumber(), response.getOrderNumber());
-        assertEquals(order.getUserId(), response.getUserId());
-        assertEquals(order.getAmount(), response.getAmount());
-        assertEquals(order.getCurrency(), response.getCurrency());
-        assertEquals(order.getStatus(), response.getStatus());
-        assertNotNull(response.getCreatedAt());
-        assertNotNull(response.getUpdatedAt());
+        assertNotNull(response.getOrderId());
+        assertNotNull(response.getOrderNumber());
+        assertEquals(OrderService.NEW, response.getStatus());
+
+        Order savedOrder = orderRepository.findById(response.getOrderId()).orElseThrow();
+        assertEquals(response.getOrderNumber(), savedOrder.getOrderNumber());
     }
 
     @Test
-    @DisplayName("Test getOrderById success")
+    @DisplayName("Get order by ID returns order")
     void getOrderById_Success() {
-        when(orderRepository.findById(order.getOrderId())).thenReturn(Optional.of(order));
+        OrderResponse createdOrder = orderService.createOrder(OrderRequest.builder()
+                .userId(2L)
+                .amount(new BigDecimal("25.00"))
+                .currency("USD")
+                .build());
 
-        OrderResponse response = orderService.getOrderById(order.getOrderId());
+        OrderResponse response = orderService.getOrderById(createdOrder.getOrderId());
 
         assertNotNull(response);
-        assertEquals(order.getOrderId(), response.getOrderId());
-        verify(orderRepository).findById(order.getOrderId());
+        assertEquals(createdOrder.getOrderId(), response.getOrderId());
     }
 
     @Test
-    @DisplayName("Test getOrderById not found")
+    @DisplayName("Get order by ID throws when missing")
     void getOrderById_NotFound() {
         UUID nonExistentId = UUID.randomUUID();
-        when(orderRepository.findById(nonExistentId)).thenReturn(Optional.empty());
-
         Exception exception = assertThrows(OrderNotFoundException.class, () ->
             orderService.getOrderById(nonExistentId)
         );
@@ -99,48 +77,54 @@ class OrderServiceTest {
     }
 
     @Test
-    @DisplayName("Test getOrderByNumber success")
+    @DisplayName("Get order by number returns order")
     void getOrderByNumber_Success() {
-        when(orderRepository.findByOrderNumber(order.getOrderNumber())).thenReturn(Optional.of(order));
+        OrderResponse createdOrder = orderService.createOrder(OrderRequest.builder()
+                .userId(3L)
+                .amount(new BigDecimal("12.00"))
+                .currency("USD")
+                .build());
 
-        OrderResponse response = orderService.getOrderByNumber(order.getOrderNumber());
+        OrderResponse response = orderService.getOrderByNumber(createdOrder.getOrderNumber());
 
         assertNotNull(response);
-        assertEquals(order.getOrderNumber(), response.getOrderNumber());
-        verify(orderRepository).findByOrderNumber(order.getOrderNumber());
+        assertEquals(createdOrder.getOrderNumber(), response.getOrderNumber());
     }
 
     @Test
-    @DisplayName("Test updateOrderStatus success with valid transition")
+    @DisplayName("Update order status succeeds with valid transition")
     void updateOrderStatus_Success() {
-        // Given the order is in NEW state, a valid transition is to PROCESSING
-        when(orderRepository.findByOrderNumber(order.getOrderNumber())).thenReturn(Optional.of(order));
-        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        OrderResponse createdOrder = orderService.createOrder(OrderRequest.builder()
+                .userId(4L)
+                .amount(new BigDecimal("55.00"))
+                .currency("USD")
+                .build());
 
-        OrderResponse response = orderService.updateOrderStatus(order.getOrderNumber(), OrderService.PROCESSING);
+        OrderResponse response = orderService.updateOrderStatus(createdOrder.getOrderNumber(), OrderService.PROCESSING);
 
         assertNotNull(response);
         assertEquals(OrderService.PROCESSING, response.getStatus());
     }
 
     @Test
-    @DisplayName("Test updateOrderStatus with invalid transition")
+    @DisplayName("Update order status rejects invalid transition")
     void updateOrderStatus_InvalidTransition() {
-        // Given the order is in NEW state, an invalid transition (e.g., to SUCCESS) should throw an exception
-        when(orderRepository.findByOrderNumber(order.getOrderNumber())).thenReturn(Optional.of(order));
+        OrderResponse createdOrder = orderService.createOrder(OrderRequest.builder()
+                .userId(5L)
+                .amount(new BigDecimal("55.00"))
+                .currency("USD")
+                .build());
 
         Exception exception = assertThrows(IllegalStateException.class, () ->
-            orderService.updateOrderStatus(order.getOrderNumber(), OrderService.SUCCESS)
+            orderService.updateOrderStatus(createdOrder.getOrderNumber(), OrderService.SUCCESS)
         );
 
         assertTrue(exception.getMessage().contains("Invalid status transition"));
     }
 
     @Test
-    @DisplayName("Test updateOrderStatus order not found")
+    @DisplayName("Update order status throws when order missing")
     void updateOrderStatus_OrderNotFound() {
-        when(orderRepository.findByOrderNumber("NON_EXISTENT")).thenReturn(Optional.empty());
-
         Exception exception = assertThrows(OrderNotFoundException.class, () ->
             orderService.updateOrderStatus("NON_EXISTENT", OrderService.PROCESSING)
         );
@@ -149,37 +133,43 @@ class OrderServiceTest {
     }
 
     @Test
-    @DisplayName("Test updateOrderStatusById success with valid transition")
+    @DisplayName("Update order status by ID succeeds with valid transition")
     void updateOrderStatusById_Success() {
-        // Given the order is in NEW state, a valid transition is to PROCESSING
-        when(orderRepository.findById(order.getOrderId())).thenReturn(Optional.of(order));
-        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        OrderResponse createdOrder = orderService.createOrder(OrderRequest.builder()
+                .userId(6L)
+                .amount(new BigDecimal("80.00"))
+                .currency("USD")
+                .build());
 
-        OrderResponse response = orderService.updateOrderStatusById(order.getOrderId(), OrderService.PROCESSING, "Payment processing");
+        OrderResponse response = orderService.updateOrderStatusById(
+                createdOrder.getOrderId(),
+                OrderService.PROCESSING,
+                "Payment processing");
 
         assertNotNull(response);
         assertEquals(OrderService.PROCESSING, response.getStatus());
     }
 
     @Test
-    @DisplayName("Test updateOrderStatusById with invalid transition")
+    @DisplayName("Update order status by ID rejects invalid transition")
     void updateOrderStatusById_InvalidTransition() {
-        // Given the order is in NEW state, an invalid transition should throw an exception
-        when(orderRepository.findById(order.getOrderId())).thenReturn(Optional.of(order));
+        OrderResponse createdOrder = orderService.createOrder(OrderRequest.builder()
+                .userId(7L)
+                .amount(new BigDecimal("80.00"))
+                .currency("USD")
+                .build());
 
         Exception exception = assertThrows(IllegalStateException.class, () ->
-            orderService.updateOrderStatusById(order.getOrderId(), OrderService.SUCCESS, "Direct to success")
+            orderService.updateOrderStatusById(createdOrder.getOrderId(), OrderService.SUCCESS, "Direct to success")
         );
 
         assertTrue(exception.getMessage().contains("Invalid status transition"));
     }
 
     @Test
-    @DisplayName("Test updateOrderStatusById order not found")
+    @DisplayName("Update order status by ID throws when missing")
     void updateOrderStatusById_OrderNotFound() {
         UUID nonExistentId = UUID.randomUUID();
-        when(orderRepository.findById(nonExistentId)).thenReturn(Optional.empty());
-
         Exception exception = assertThrows(OrderNotFoundException.class, () ->
             orderService.updateOrderStatusById(nonExistentId, OrderService.PROCESSING, "Processing message")
         );

@@ -1,93 +1,169 @@
 package com.fusionxpay.api.gateway.controller;
 
 import com.fusionxpay.api.gateway.dto.AuthRequest;
-import com.fusionxpay.api.gateway.dto.AuthResponse;
-import com.fusionxpay.api.gateway.service.UserService;
-import org.junit.jupiter.api.BeforeEach;
+import com.fusionxpay.api.gateway.model.User;
+import com.fusionxpay.api.gateway.repository.UserRepository;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.reactive.AutoConfigureWebTestClient;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.web.reactive.server.WebTestClient;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@ExtendWith(MockitoExtension.class)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@AutoConfigureWebTestClient
 class AuthControllerTest {
 
-    @Mock
-    private UserService userService;
+    @Autowired
+    private WebTestClient webTestClient;
 
-    @InjectMocks
-    private AuthController authController;
+    @Autowired
+    private UserRepository userRepository;
 
-    private AuthRequest authRequest;
-    private AuthResponse authResponse;
+    @Autowired
+    private PasswordEncoder passwordEncoder;
 
-    @BeforeEach
-    void setUp() {
-        // Setup test data
-        authRequest = new AuthRequest();
-        authRequest.setUsername("testuser");
-        authRequest.setPassword("testpassword");
+    private final List<String> cleanupUsernames = new ArrayList<>();
 
-        authResponse = AuthResponse.builder()
-                .username("testuser")
+    @AfterEach
+    void tearDown() {
+        for (String username : cleanupUsernames) {
+            userRepository.findByUsername(username).ifPresent(userRepository::delete);
+        }
+        cleanupUsernames.clear();
+    }
+
+    @Test
+    @DisplayName("Register succeeds and persists user")
+    void registerSuccess() {
+        String username = "user-" + UUID.randomUUID();
+        String password = "testpassword";
+        cleanupUsernames.add(username);
+
+        AuthRequest request = new AuthRequest();
+        request.setUsername(username);
+        request.setPassword(password);
+
+        webTestClient.post()
+                .uri("/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .exchange()
+                .expectStatus().isCreated()
+                .expectBody()
+                .jsonPath("$.username").isEqualTo(username)
+                .jsonPath("$.apiKey").isNotEmpty();
+        assertTrue(userRepository.findByUsername(username)
+                .map(user -> passwordEncoder.matches(password, user.getPassword()))
+                .orElse(false));
+    }
+
+    @Test
+    @DisplayName("Register returns 400 for duplicate user")
+    void registerDuplicateUsername() {
+        String username = "user-" + UUID.randomUUID();
+        String password = "testpassword";
+        cleanupUsernames.add(username);
+
+        User existingUser = User.builder()
+                .username(username)
+                .password(passwordEncoder.encode(password))
                 .apiKey(UUID.randomUUID().toString())
+                .roles("USER")
                 .build();
+        userRepository.save(existingUser);
+
+        AuthRequest request = new AuthRequest();
+        request.setUsername(username);
+        request.setPassword(password);
+
+        webTestClient.post()
+                .uri("/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .exchange()
+                .expectStatus().isBadRequest();
     }
 
     @Test
-    @DisplayName("Test successful user registration")
-    void registerSuccess() throws Exception {
-        when(userService.register(any(AuthRequest.class))).thenReturn(authResponse);
+    @DisplayName("Login succeeds with valid credentials")
+    void loginSuccess() {
+        String username = "user-" + UUID.randomUUID();
+        String password = "testpassword";
+        String apiKey = UUID.randomUUID().toString();
+        cleanupUsernames.add(username);
 
-        ResponseEntity<AuthResponse> response = authController.register(authRequest);
+        User user = User.builder()
+                .username(username)
+                .password(passwordEncoder.encode(password))
+                .apiKey(apiKey)
+                .roles("USER")
+                .build();
+        userRepository.save(user);
 
-        assertEquals(HttpStatus.CREATED, response.getStatusCode());
-        assertEquals(authResponse.getUsername(), response.getBody().getUsername());
-        assertEquals(authResponse.getApiKey(), response.getBody().getApiKey());
+        AuthRequest request = new AuthRequest();
+        request.setUsername(username);
+        request.setPassword(password);
+
+        webTestClient.post()
+                .uri("/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.username").isEqualTo(username)
+                .jsonPath("$.apiKey").isEqualTo(apiKey);
     }
 
     @Test
-    @DisplayName("Test registration with duplicate username")
-    void registerDuplicateUsername() throws Exception {
-        when(userService.register(any(AuthRequest.class))).thenThrow(new Exception("User already exists"));
+    @DisplayName("Login returns 400 for invalid credentials")
+    void loginInvalidCredentials() {
+        String username = "user-" + UUID.randomUUID();
+        String password = "testpassword";
+        cleanupUsernames.add(username);
 
-        ResponseEntity<AuthResponse> response = authController.register(authRequest);
+        User user = User.builder()
+                .username(username)
+                .password(passwordEncoder.encode(password))
+                .apiKey(UUID.randomUUID().toString())
+                .roles("USER")
+                .build();
+        userRepository.save(user);
 
-        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-        assertNull(response.getBody());
+        AuthRequest request = new AuthRequest();
+        request.setUsername(username);
+        request.setPassword("wrong-password");
+
+        webTestClient.post()
+                .uri("/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .exchange()
+                .expectStatus().isBadRequest();
     }
 
     @Test
-    @DisplayName("Test successful user login")
-    void loginSuccess() throws Exception {
-        when(userService.login(any(AuthRequest.class))).thenReturn(authResponse);
+    @DisplayName("Validation errors return 400")
+    void validationErrors() {
+        AuthRequest request = new AuthRequest();
+        request.setUsername("");
+        request.setPassword("");
 
-        ResponseEntity<AuthResponse> response = authController.login(authRequest);
-
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertEquals(authResponse.getUsername(), response.getBody().getUsername());
-        assertEquals(authResponse.getApiKey(), response.getBody().getApiKey());
-    }
-
-    @Test
-    @DisplayName("Test login with invalid credentials")
-    void loginInvalidCredentials() throws Exception {
-        when(userService.login(any(AuthRequest.class))).thenThrow(new Exception("Invalid credentials"));
-
-        ResponseEntity<AuthResponse> response = authController.login(authRequest);
-
-        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-        assertNull(response.getBody());
+        webTestClient.post()
+                .uri("/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .exchange()
+                .expectStatus().isBadRequest();
     }
 }

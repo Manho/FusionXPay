@@ -1,134 +1,126 @@
 package com.fusionxpay.api.gateway.filter;
 
 import com.fusionxpay.api.gateway.model.User;
-import com.fusionxpay.api.gateway.service.UserService;
-import org.junit.jupiter.api.BeforeEach;
+import com.fusionxpay.api.gateway.repository.UserRepository;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
 import org.springframework.mock.web.server.MockServerWebExchange;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
-import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@ExtendWith(MockitoExtension.class)
+@SpringBootTest
 class ApiKeyAuthFilterTest {
 
-    @Mock
-    private UserService userService;
-
-    @Mock
-    private GatewayFilterChain filterChain;
-
-    @InjectMocks
+    @Autowired
     private ApiKeyAuthFilter apiKeyAuthFilter;
 
-    private User testUser;
-    private String validApiKey;
+    @Autowired
+    private UserRepository userRepository;
 
-    @BeforeEach
-    void setUp() {
-        validApiKey = UUID.randomUUID().toString();
-        testUser = User.builder()
-                .id(1L)
-                .username("testuser")
-                .password("hashedpassword")
-                .apiKey(validApiKey)
-                .roles("USER")
-                .build();
+    @Autowired
+    private PasswordEncoder passwordEncoder;
 
-        // Mock the filter chain to return a completed Mono
-        lenient().when(filterChain.filter(any(ServerWebExchange.class))).thenReturn(Mono.empty());
+    private String cleanupUsername;
+
+    @AfterEach
+    void tearDown() {
+        if (cleanupUsername != null) {
+            userRepository.findByUsername(cleanupUsername).ifPresent(userRepository::delete);
+        }
     }
 
     @Test
-    @DisplayName("Test that public endpoints bypass API key validation")
+    @DisplayName("Public endpoints bypass API key validation")
     void publicEndpointsAllowed() {
-        // Test auth endpoint
+        TrackingFilterChain chain = new TrackingFilterChain();
         ServerWebExchange authExchange = MockServerWebExchange.from(
                 MockServerHttpRequest.get("/auth/login").build());
 
-        when(filterChain.filter(authExchange)).thenReturn(Mono.empty());
-        apiKeyAuthFilter.filter(authExchange, filterChain).block();
+        apiKeyAuthFilter.filter(authExchange, chain).block();
+        assertTrue(chain.wasCalled());
 
-        verify(filterChain).filter(authExchange);
-        verify(userService, never()).getUserByApiKey(anyString());
-
-        // Test swagger endpoint
+        TrackingFilterChain swaggerChain = new TrackingFilterChain();
         ServerWebExchange swaggerExchange = MockServerWebExchange.from(
                 MockServerHttpRequest.get("/swagger-ui/index.html").build());
 
-        when(filterChain.filter(swaggerExchange)).thenReturn(Mono.empty());
-        apiKeyAuthFilter.filter(swaggerExchange, filterChain).block();
-
-        verify(filterChain).filter(swaggerExchange);
-        verify(userService, never()).getUserByApiKey(anyString());
+        apiKeyAuthFilter.filter(swaggerExchange, swaggerChain).block();
+        assertTrue(swaggerChain.wasCalled());
     }
 
     @Test
-    @DisplayName("Test that protected endpoints require API key")
+    @DisplayName("Protected endpoints require API key")
     void protectedEndpointsRequireApiKey() {
-        // Create a request without API key
+        TrackingFilterChain chain = new TrackingFilterChain();
         ServerWebExchange exchange = MockServerWebExchange.from(
                 MockServerHttpRequest.get("/order-service/api/orders").build());
 
-        apiKeyAuthFilter.filter(exchange, filterChain).block();
+        apiKeyAuthFilter.filter(exchange, chain).block();
 
-        // Verify that the response status is set to UNAUTHORIZED
         assertEquals(HttpStatus.UNAUTHORIZED, exchange.getResponse().getStatusCode());
-        verify(filterChain, never()).filter(exchange);
-        verify(userService, never()).getUserByApiKey(anyString());
     }
 
     @Test
-    @DisplayName("Test that valid API key allows access to protected endpoints")
+    @DisplayName("Valid API key allows access to protected endpoints")
     void validApiKeyAllowsAccess() {
-        // Create a request with valid API key
+        String apiKey = UUID.randomUUID().toString();
+        cleanupUsername = "user-" + UUID.randomUUID();
+
+        User user = User.builder()
+                .username(cleanupUsername)
+                .password(passwordEncoder.encode("testpassword"))
+                .apiKey(apiKey)
+                .roles("USER")
+                .build();
+        userRepository.save(user);
+
+        TrackingFilterChain chain = new TrackingFilterChain();
         ServerWebExchange exchange = MockServerWebExchange.from(
                 MockServerHttpRequest.get("/order-service/api/orders")
-                        .header("X-API-Key", validApiKey)
+                        .header("X-API-Key", apiKey)
                         .build());
 
-        when(userService.getUserByApiKey(validApiKey)).thenReturn(Optional.of(testUser));
-        when(filterChain.filter(exchange)).thenReturn(Mono.empty());
+        apiKeyAuthFilter.filter(exchange, chain).block();
 
-        apiKeyAuthFilter.filter(exchange, filterChain).block();
-
-        verify(userService).getUserByApiKey(validApiKey);
-        verify(filterChain).filter(exchange);
+        assertTrue(chain.wasCalled());
     }
 
     @Test
-    @DisplayName("Test that invalid API key blocks access to protected endpoints")
+    @DisplayName("Invalid API key blocks access to protected endpoints")
     void invalidApiKeyBlocksAccess() {
-        String invalidApiKey = "invalid-api-key";
-
-        // Create a request with invalid API key
+        TrackingFilterChain chain = new TrackingFilterChain();
         ServerWebExchange exchange = MockServerWebExchange.from(
                 MockServerHttpRequest.get("/order-service/api/orders")
-                        .header("X-API-Key", invalidApiKey)
+                        .header("X-API-Key", "invalid-api-key")
                         .build());
 
-        when(userService.getUserByApiKey(invalidApiKey)).thenReturn(Optional.empty());
+        apiKeyAuthFilter.filter(exchange, chain).block();
 
-        apiKeyAuthFilter.filter(exchange, filterChain).block();
-
-        // Verify that the response status is set to UNAUTHORIZED
         assertEquals(HttpStatus.UNAUTHORIZED, exchange.getResponse().getStatusCode());
-        verify(userService).getUserByApiKey(invalidApiKey);
-        verify(filterChain, never()).filter(exchange);
+    }
+
+    private static class TrackingFilterChain implements GatewayFilterChain {
+        private boolean called;
+
+        @Override
+        public Mono<Void> filter(ServerWebExchange exchange) {
+            called = true;
+            return Mono.empty();
+        }
+
+        boolean wasCalled() {
+            return called;
+        }
     }
 }

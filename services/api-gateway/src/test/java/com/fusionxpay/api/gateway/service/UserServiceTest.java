@@ -4,147 +4,156 @@ import com.fusionxpay.api.gateway.dto.AuthRequest;
 import com.fusionxpay.api.gateway.dto.AuthResponse;
 import com.fusionxpay.api.gateway.model.User;
 import com.fusionxpay.api.gateway.repository.UserRepository;
-import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
 
-@ExtendWith(MockitoExtension.class)
+@SpringBootTest
 class UserServiceTest {
 
-    @Mock
-    private UserRepository userRepository;
-
-    @Mock
-    private PasswordEncoder passwordEncoder;
-
-    @InjectMocks
+    @Autowired
     private UserService userService;
 
-    private AuthRequest authRequest;
-    private User user;
+    @Autowired
+    private UserRepository userRepository;
 
-    @BeforeEach
-    void setUp() {
-        authRequest = new AuthRequest();
-        authRequest.setUsername("testuser");
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
+    private final List<String> cleanupUsernames = new ArrayList<>();
+
+    @AfterEach
+    void tearDown() {
+        for (String username : cleanupUsernames) {
+            userRepository.findByUsername(username).ifPresent(userRepository::delete);
+        }
+        cleanupUsernames.clear();
+    }
+
+    @Test
+    @DisplayName("Register creates a new user with hashed password")
+    void register_Success() throws Exception {
+        AuthRequest authRequest = new AuthRequest();
+        authRequest.setUsername("user-" + UUID.randomUUID());
         authRequest.setPassword("testpassword");
+        cleanupUsernames.add(authRequest.getUsername());
 
-        // Simulate a hashed password returned by the encoder
-        String hashedPassword = "hashed_testpassword";
-        user = User.builder()
-                .id(1L)
-                .username("testuser")
-                .password(hashedPassword)
+        AuthResponse response = userService.register(authRequest);
+
+        assertNotNull(response);
+        assertEquals(authRequest.getUsername(), response.getUsername());
+        assertNotNull(response.getApiKey());
+
+        User savedUser = userRepository.findByUsername(authRequest.getUsername()).orElseThrow();
+        assertTrue(passwordEncoder.matches(authRequest.getPassword(), savedUser.getPassword()));
+    }
+
+    @Test
+    @DisplayName("Register fails for duplicate user")
+    void register_DuplicateUser() {
+        String username = "user-" + UUID.randomUUID();
+        cleanupUsernames.add(username);
+
+        User user = User.builder()
+                .username(username)
+                .password(passwordEncoder.encode("testpassword"))
                 .apiKey(UUID.randomUUID().toString())
                 .roles("USER")
                 .build();
-    }
+        userRepository.save(user);
 
-    @Test
-    @DisplayName("Test register success")
-    void register_Success() throws Exception {
-        // Arrange
-        when(userRepository.findByUsername(authRequest.getUsername())).thenReturn(Optional.empty());
-        when(passwordEncoder.encode(authRequest.getPassword())).thenReturn("hashed_testpassword");
-        when(userRepository.save(any(User.class))).thenReturn(user);
+        AuthRequest authRequest = new AuthRequest();
+        authRequest.setUsername(username);
+        authRequest.setPassword("testpassword");
 
-        // Act
-        AuthResponse response = userService.register(authRequest);
-
-        // Assert
-        assertNotNull(response);
-        assertEquals(user.getUsername(), response.getUsername());
-        assertNotNull(response.getApiKey());
-        verify(userRepository).findByUsername(authRequest.getUsername());
-        verify(passwordEncoder).encode(authRequest.getPassword());
-        verify(userRepository).save(any(User.class));
-    }
-
-    @Test
-    @DisplayName("Test register duplicate user")
-    void register_DuplicateUser() {
-        // Arrange: simulate that the user already exists
-        when(userRepository.findByUsername(authRequest.getUsername())).thenReturn(Optional.of(user));
-
-        // Act & Assert
         Exception exception = assertThrows(Exception.class, () -> userService.register(authRequest));
         assertTrue(exception.getMessage().contains("User already exists"));
-        verify(userRepository).findByUsername(authRequest.getUsername());
-        verify(passwordEncoder, never()).encode(any());
-        verify(userRepository, never()).save(any());
     }
 
     @Test
-    @DisplayName("Test login success")
+    @DisplayName("Login succeeds with valid credentials")
     void login_Success() throws Exception {
-        // Arrange
-        when(userRepository.findByUsername(authRequest.getUsername())).thenReturn(Optional.of(user));
-        when(passwordEncoder.matches(authRequest.getPassword(), user.getPassword())).thenReturn(true);
+        String username = "user-" + UUID.randomUUID();
+        String password = "testpassword";
+        String apiKey = UUID.randomUUID().toString();
+        cleanupUsernames.add(username);
 
-        // Act
+        User user = User.builder()
+                .username(username)
+                .password(passwordEncoder.encode(password))
+                .apiKey(apiKey)
+                .roles("USER")
+                .build();
+        userRepository.save(user);
+
+        AuthRequest authRequest = new AuthRequest();
+        authRequest.setUsername(username);
+        authRequest.setPassword(password);
+
         AuthResponse response = userService.login(authRequest);
 
-        // Assert
         assertNotNull(response);
-        assertEquals(user.getUsername(), response.getUsername());
-        assertEquals(user.getApiKey(), response.getApiKey());
-        verify(userRepository).findByUsername(authRequest.getUsername());
-        verify(passwordEncoder).matches(authRequest.getPassword(), user.getPassword());
+        assertEquals(username, response.getUsername());
+        assertEquals(apiKey, response.getApiKey());
     }
 
     @Test
-    @DisplayName("Test login failure due to wrong password")
+    @DisplayName("Login fails with invalid credentials")
     void login_Failure_WrongPassword() {
-        // Arrange
-        when(userRepository.findByUsername(authRequest.getUsername())).thenReturn(Optional.of(user));
-        when(passwordEncoder.matches(authRequest.getPassword(), user.getPassword())).thenReturn(false);
+        String username = "user-" + UUID.randomUUID();
+        cleanupUsernames.add(username);
 
-        // Act & Assert
+        User user = User.builder()
+                .username(username)
+                .password(passwordEncoder.encode("testpassword"))
+                .apiKey(UUID.randomUUID().toString())
+                .roles("USER")
+                .build();
+        userRepository.save(user);
+
+        AuthRequest authRequest = new AuthRequest();
+        authRequest.setUsername(username);
+        authRequest.setPassword("wrong-password");
+
         Exception exception = assertThrows(Exception.class, () -> userService.login(authRequest));
         assertTrue(exception.getMessage().contains("Invalid credentials"));
-        verify(userRepository).findByUsername(authRequest.getUsername());
-        verify(passwordEncoder).matches(authRequest.getPassword(), user.getPassword());
     }
 
     @Test
-    @DisplayName("Test getUserByApiKey returns user")
+    @DisplayName("Get user by API key returns user")
     void getUserByApiKey_Found() {
-        // Arrange
-        when(userRepository.findByApiKey(user.getApiKey())).thenReturn(Optional.of(user));
+        String username = "user-" + UUID.randomUUID();
+        String apiKey = UUID.randomUUID().toString();
+        cleanupUsernames.add(username);
 
-        // Act
-        Optional<User> result = userService.getUserByApiKey(user.getApiKey());
+        User user = User.builder()
+                .username(username)
+                .password(passwordEncoder.encode("testpassword"))
+                .apiKey(apiKey)
+                .roles("USER")
+                .build();
+        userRepository.save(user);
 
-        // Assert
+        Optional<User> result = userService.getUserByApiKey(apiKey);
+
         assertTrue(result.isPresent());
-        assertEquals(user.getUsername(), result.get().getUsername());
-        verify(userRepository).findByApiKey(user.getApiKey());
+        assertEquals(username, result.get().getUsername());
     }
 
     @Test
-    @DisplayName("Test getUserByApiKey returns empty")
+    @DisplayName("Get user by API key returns empty when not found")
     void getUserByApiKey_NotFound() {
-        // Arrange
-        String nonExistentKey = "nonexistent-api-key";
-        when(userRepository.findByApiKey(nonExistentKey)).thenReturn(Optional.empty());
-
-        // Act
-        Optional<User> result = userService.getUserByApiKey(nonExistentKey);
-
-        // Assert
+        Optional<User> result = userService.getUserByApiKey("nonexistent-api-key");
         assertFalse(result.isPresent());
-        verify(userRepository).findByApiKey(nonExistentKey);
     }
 }

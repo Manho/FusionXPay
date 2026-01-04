@@ -113,6 +113,9 @@ public class OrderService {
     }
     
     private OrderResponse getOrderByIdFallback(UUID orderId, Exception ex) {
+        if (ex instanceof OrderNotFoundException) {
+            throw (OrderNotFoundException) ex;
+        }
         log.error("Fallback: Failed to fetch order with orderId: {} due to: {}", orderId, ex.getMessage());
         return OrderResponse.builder()
                 .status("ERROR")

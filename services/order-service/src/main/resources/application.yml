@@ -50,6 +50,8 @@ resilience4j:
         permittedNumberOfCallsInHalfOpenState: 3
         waitDurationInOpenState: 5s
         failureRateThreshold: 50
+        ignore-exceptions:
+          - com.fusionxpay.order.exception.OrderNotFoundException
   retry:
     instances:
       orderService:
