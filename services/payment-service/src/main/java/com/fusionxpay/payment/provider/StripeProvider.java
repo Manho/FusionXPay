@@ -191,6 +191,10 @@ public class StripeProvider implements PaymentProvider {
                     case "checkout.session.completed":
                         response = handleCheckoutSessionCompleted(event);
                         break;
+                    case "charge.refunded":
+                    case "charge.refund.updated":
+                        response = handleRefundEvent(event);
+                        break;
                     default:
                         log.info("Unhandled event type: {}", eventType);
                         response = null;
@@ -226,9 +230,11 @@ public class StripeProvider implements PaymentProvider {
 
     // Helper method to determine if this event affects payment status
     private boolean isPaymentStatusEvent(String eventType) {
-        return eventType.equals("payment_intent.succeeded") || 
+        return eventType.equals("payment_intent.succeeded") ||
                eventType.equals("payment_intent.payment_failed") ||
-               eventType.equals("checkout.session.completed");
+               eventType.equals("checkout.session.completed") ||
+               eventType.equals("charge.refunded") ||
+               eventType.equals("charge.refund.updated");
     }
 
     // Helper method to extract orderId from different event types
@@ -249,6 +255,22 @@ public class StripeProvider implements PaymentProvider {
                 }
             } else {
                 return session.getClientReferenceId(); // Fallback to client reference ID which should be orderId
+            }
+        } else if (eventType.equals("charge.refunded") || eventType.equals("charge.refund.updated")) {
+            com.stripe.model.Charge charge = (com.stripe.model.Charge) event.getDataObjectDeserializer().getObject().get();
+            // Try to get orderId from charge metadata
+            if (charge.getMetadata() != null && charge.getMetadata().containsKey("orderId")) {
+                return charge.getMetadata().get("orderId");
+            }
+            // Fallback: try to get from payment intent
+            if (charge.getPaymentIntent() != null) {
+                try {
+                    PaymentIntent intent = PaymentIntent.retrieve(charge.getPaymentIntent());
+                    return intent.getMetadata().get("orderId");
+                } catch (StripeException e) {
+                    log.error("Error retrieving payment intent for refund: {}", e.getMessage(), e);
+                    return null;
+                }
             }
         }
         return null;
@@ -295,13 +317,13 @@ public class StripeProvider implements PaymentProvider {
     private PaymentResponse handlePaymentFailure(Event event) {
         PaymentIntent intent = (PaymentIntent) event.getDataObjectDeserializer().getObject().get();
         log.info("Payment failed for intent: {}", intent.getId());
-        
+
         String orderId = intent.getMetadata().get("orderId");
-        String errorMessage = intent.getLastPaymentError() != null ? 
+        String errorMessage = intent.getLastPaymentError() != null ?
                 intent.getLastPaymentError().getMessage() : "Payment failed";
-                
+
         log.error("Payment failed: {}, order: {}", errorMessage, orderId);
-        
+
         return PaymentResponse.builder()
                 .status(PaymentStatus.FAILED)
                 .orderId(UUID.fromString(orderId))
@@ -309,6 +331,59 @@ public class StripeProvider implements PaymentProvider {
                 .providerTransactionId(intent.getId()) // Store Stripe's payment intent ID
                 .errorMessage(errorMessage)
                 .build();
+    }
+
+    /**
+     * Handles refund events from Stripe webhooks.
+     * Updates the transaction status to REFUNDED when a refund is completed.
+     */
+    private PaymentResponse handleRefundEvent(Event event) {
+        try {
+            com.stripe.model.Charge charge = (com.stripe.model.Charge) event.getDataObjectDeserializer().getObject().get();
+            String chargeId = charge.getId();
+            String refundStatus = charge.getRefunded() != null && charge.getRefunded() ? "refunded" : "partial_refund";
+
+            log.info("Processing Stripe refund event. ChargeId: {}, Refunded: {}, AmountRefunded: {}",
+                    chargeId, charge.getRefunded(), charge.getAmountRefunded());
+
+            // Try to get orderId from charge metadata or payment intent
+            String orderId = null;
+            if (charge.getMetadata() != null && charge.getMetadata().containsKey("orderId")) {
+                orderId = charge.getMetadata().get("orderId");
+            } else if (charge.getPaymentIntent() != null) {
+                try {
+                    PaymentIntent intent = PaymentIntent.retrieve(charge.getPaymentIntent());
+                    orderId = intent.getMetadata().get("orderId");
+                } catch (StripeException e) {
+                    log.error("Error retrieving payment intent for refund: {}", e.getMessage(), e);
+                }
+            }
+
+            if (orderId == null) {
+                log.warn("Could not determine orderId for refund event. ChargeId: {}", chargeId);
+                return null;
+            }
+
+            // Determine the appropriate status
+            PaymentStatus status = charge.getRefunded() != null && charge.getRefunded()
+                    ? PaymentStatus.SUCCESS  // Using SUCCESS to indicate refund completed
+                    : PaymentStatus.PROCESSING;  // Partial refund still processing
+
+            log.info("Stripe refund processed. OrderId: {}, ChargeId: {}, Status: {}",
+                    orderId, chargeId, refundStatus);
+
+            return PaymentResponse.builder()
+                    .status(status)
+                    .orderId(UUID.fromString(orderId))
+                    .paymentChannel(getProviderName())
+                    .providerTransactionId(chargeId)
+                    .errorMessage("Refund " + refundStatus) // Use errorMessage to indicate refund status
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Error processing refund event: {}", e.getMessage(), e);
+            return createErrorResponse("Error processing refund event: " + e.getMessage());
+        }
     }
 
     private PaymentResponse createErrorResponse(String errorMessage) {
@@ -332,7 +407,101 @@ public class StripeProvider implements PaymentProvider {
     public String getProviderName() {
         return "STRIPE";
     }
-    
+
+    /**
+     * Processes a refund for a Stripe payment.
+     *
+     * @param paymentIntentId the Stripe PaymentIntent ID
+     * @param amount the amount to refund in the original currency (null for full refund)
+     * @param reason the reason for the refund
+     * @return refund response with refund details
+     */
+    public com.fusionxpay.payment.dto.RefundResponse processRefund(String paymentIntentId, BigDecimal amount, String reason) {
+        log.info("Processing Stripe refund for PaymentIntent: {}", paymentIntentId);
+
+        try {
+            com.stripe.param.RefundCreateParams.Builder paramsBuilder = com.stripe.param.RefundCreateParams.builder()
+                    .setPaymentIntent(paymentIntentId);
+
+            // If amount is specified, it's a partial refund (convert to smallest unit)
+            if (amount != null) {
+                long amountInSmallestUnit = amount.multiply(new BigDecimal(100)).longValue();
+                paramsBuilder.setAmount(amountInSmallestUnit);
+            }
+
+            // Set refund reason if provided
+            if (reason != null && !reason.isEmpty()) {
+                // Map to Stripe's predefined reasons
+                com.stripe.param.RefundCreateParams.Reason stripeReason = mapRefundReason(reason);
+                if (stripeReason != null) {
+                    paramsBuilder.setReason(stripeReason);
+                }
+            }
+
+            com.stripe.model.Refund refund = com.stripe.model.Refund.create(paramsBuilder.build());
+
+            log.info("Stripe refund processed. PaymentIntentId: {}, RefundId: {}, Status: {}",
+                    paymentIntentId, refund.getId(), refund.getStatus());
+
+            return com.fusionxpay.payment.dto.RefundResponse.builder()
+                    .refundId(UUID.randomUUID().toString())
+                    .providerRefundId(refund.getId())
+                    .status(mapStripeRefundStatus(refund.getStatus()))
+                    .amount(amount != null ? amount : new BigDecimal(refund.getAmount()).divide(new BigDecimal(100)))
+                    .currency(refund.getCurrency().toUpperCase())
+                    .paymentChannel(getProviderName())
+                    .createdAt(java.time.LocalDateTime.now())
+                    .build();
+
+        } catch (StripeException e) {
+            log.error("Error processing Stripe refund for PaymentIntent {}: {}", paymentIntentId, e.getMessage(), e);
+            return com.fusionxpay.payment.dto.RefundResponse.builder()
+                    .status(com.fusionxpay.payment.model.RefundStatus.FAILED)
+                    .paymentChannel(getProviderName())
+                    .errorMessage("Stripe refund failed: " + e.getMessage())
+                    .build();
+        }
+    }
+
+    /**
+     * Maps a string reason to Stripe's RefundCreateParams.Reason enum.
+     */
+    private com.stripe.param.RefundCreateParams.Reason mapRefundReason(String reason) {
+        if (reason == null) {
+            return null;
+        }
+        String lowerReason = reason.toLowerCase();
+        if (lowerReason.contains("duplicate")) {
+            return com.stripe.param.RefundCreateParams.Reason.DUPLICATE;
+        } else if (lowerReason.contains("fraud")) {
+            return com.stripe.param.RefundCreateParams.Reason.FRAUDULENT;
+        } else if (lowerReason.contains("request") || lowerReason.contains("customer")) {
+            return com.stripe.param.RefundCreateParams.Reason.REQUESTED_BY_CUSTOMER;
+        }
+        return null; // Use default if no match
+    }
+
+    /**
+     * Maps Stripe refund status to internal RefundStatus.
+     */
+    private com.fusionxpay.payment.model.RefundStatus mapStripeRefundStatus(String stripeStatus) {
+        if (stripeStatus == null) {
+            return com.fusionxpay.payment.model.RefundStatus.PENDING;
+        }
+        switch (stripeStatus) {
+            case "succeeded":
+                return com.fusionxpay.payment.model.RefundStatus.COMPLETED;
+            case "pending":
+                return com.fusionxpay.payment.model.RefundStatus.PENDING;
+            case "failed":
+                return com.fusionxpay.payment.model.RefundStatus.FAILED;
+            case "canceled":
+                return com.fusionxpay.payment.model.RefundStatus.CANCELLED;
+            default:
+                return com.fusionxpay.payment.model.RefundStatus.PROCESSING;
+        }
+    }
+
     @Override
     public boolean validateCallback(String payload, String signature) {
         try {

@@ -2,11 +2,16 @@ package com.fusionxpay.payment.service;
 
 import com.fusionxpay.payment.dto.PaymentRequest;
 import com.fusionxpay.payment.dto.PaymentResponse;
+import com.fusionxpay.payment.dto.RefundRequest;
+import com.fusionxpay.payment.dto.RefundResponse;
 import com.fusionxpay.payment.event.OrderEventProducer;
 import com.fusionxpay.common.model.PaymentStatus;
 import com.fusionxpay.payment.model.PaymentTransaction;
+import com.fusionxpay.payment.model.RefundStatus;
 import com.fusionxpay.payment.provider.PaymentProvider;
 import com.fusionxpay.payment.provider.PaymentProviderFactory;
+import com.fusionxpay.payment.provider.PayPalProvider;
+import com.fusionxpay.payment.provider.StripeProvider;
 import com.fusionxpay.payment.repository.PaymentTransactionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -269,7 +274,7 @@ public class PaymentService {
     
     /**
      * Maps a PaymentTransaction entity to a PaymentResponse DTO
-     * 
+     *
      * @param transaction the transaction entity
      * @param redirectUrl the redirect URL from the provider
      * @return PaymentResponse DTO
@@ -288,5 +293,186 @@ public class PaymentService {
                 .createdAt(transaction.getCreatedAt())
                 .updatedAt(transaction.getUpdatedAt())
                 .build();
+    }
+
+    /**
+     * Updates the payment status for a given order.
+     * Used by callback handlers to update payment state.
+     *
+     * @param orderId the order ID
+     * @param status the new payment status
+     * @return true if update was successful, false otherwise
+     */
+    @Transactional
+    public boolean updatePaymentStatus(UUID orderId, PaymentStatus status) {
+        log.info("Updating payment status for order {} to {}", orderId, status);
+
+        Optional<PaymentTransaction> optionalTransaction =
+                paymentTransactionRepository.findByOrderId(orderId);
+
+        if (optionalTransaction.isEmpty()) {
+            log.warn("Transaction not found for order: {}", orderId);
+            return false;
+        }
+
+        PaymentTransaction transaction = optionalTransaction.get();
+        String previousStatus = transaction.getStatus();
+
+        transaction.setStatus(status.name());
+        paymentTransactionRepository.save(transaction);
+
+        log.info("Updated transaction {} status: {} -> {}",
+                transaction.getTransactionId(), previousStatus, status);
+
+        // Notify order service about the status update
+        orderEventProducer.sendPaymentStatusUpdate(
+                transaction.getOrderId(),
+                transaction.getTransactionId(),
+                status
+        );
+
+        return true;
+    }
+
+    /**
+     * Initiates a refund for a payment transaction.
+     *
+     * @param refundRequest the refund request details
+     * @return RefundResponse with refund details
+     */
+    @Transactional
+    public RefundResponse initiateRefund(RefundRequest refundRequest) {
+        log.info("Initiating refund for transaction: {}", refundRequest.getTransactionId());
+
+        // Find the original transaction
+        UUID transactionId;
+        try {
+            transactionId = UUID.fromString(refundRequest.getTransactionId());
+        } catch (IllegalArgumentException e) {
+            log.error("Invalid transaction ID format: {}", refundRequest.getTransactionId());
+            return RefundResponse.builder()
+                    .status(RefundStatus.FAILED)
+                    .errorMessage("Invalid transaction ID format")
+                    .build();
+        }
+
+        Optional<PaymentTransaction> optionalTransaction =
+                paymentTransactionRepository.findById(transactionId);
+
+        if (optionalTransaction.isEmpty()) {
+            log.error("Transaction not found: {}", transactionId);
+            return RefundResponse.builder()
+                    .status(RefundStatus.FAILED)
+                    .errorMessage("Transaction not found")
+                    .build();
+        }
+
+        PaymentTransaction transaction = optionalTransaction.get();
+
+        // Check if transaction is in a refundable state
+        if (!PaymentStatus.SUCCESS.name().equals(transaction.getStatus())) {
+            log.error("Transaction {} is not in a refundable state: {}",
+                    transactionId, transaction.getStatus());
+            return RefundResponse.builder()
+                    .status(RefundStatus.FAILED)
+                    .transactionId(transactionId.toString())
+                    .errorMessage("Transaction is not in a refundable state")
+                    .build();
+        }
+
+        // Get the provider transaction ID (Stripe PaymentIntent ID or PayPal Capture ID)
+        String providerTransactionId = transaction.getProviderTransactionId();
+        if (providerTransactionId == null || providerTransactionId.isEmpty()) {
+            log.error("No provider transaction ID found for transaction: {}", transactionId);
+            return RefundResponse.builder()
+                    .status(RefundStatus.FAILED)
+                    .transactionId(transactionId.toString())
+                    .errorMessage("No provider transaction ID found")
+                    .build();
+        }
+
+        // Process refund based on payment channel
+        String paymentChannel = transaction.getPaymentChannel();
+        RefundResponse refundResponse;
+
+        try {
+            if ("STRIPE".equalsIgnoreCase(paymentChannel)) {
+                StripeProvider stripeProvider = (StripeProvider) paymentProviderFactory.getProvider("STRIPE");
+                refundResponse = stripeProvider.processRefund(
+                        providerTransactionId,
+                        refundRequest.getAmount(),
+                        refundRequest.getReason()
+                );
+            } else if ("PAYPAL".equalsIgnoreCase(paymentChannel)) {
+                PayPalProvider payPalProvider = (PayPalProvider) paymentProviderFactory.getProvider("PAYPAL");
+                // For PayPal, we need the capture ID which should be stored in providerTransactionId
+                var paypalResponse = payPalProvider.processRefund(
+                        refundRequest.getCaptureId() != null ? refundRequest.getCaptureId() : providerTransactionId,
+                        refundRequest.getAmount(),
+                        refundRequest.getCurrency() != null ? refundRequest.getCurrency() : transaction.getCurrency(),
+                        refundRequest.getReason()
+                );
+
+                // Map PayPal response to RefundResponse
+                refundResponse = RefundResponse.builder()
+                        .refundId(UUID.randomUUID().toString())
+                        .transactionId(transactionId.toString())
+                        .providerRefundId(paypalResponse.getId())
+                        .status(mapPayPalRefundStatus(paypalResponse.getStatus()))
+                        .amount(refundRequest.getAmount() != null ? refundRequest.getAmount() : transaction.getAmount())
+                        .currency(transaction.getCurrency())
+                        .paymentChannel(paymentChannel)
+                        .createdAt(java.time.LocalDateTime.now())
+                        .build();
+            } else {
+                log.error("Unsupported payment channel for refund: {}", paymentChannel);
+                return RefundResponse.builder()
+                        .status(RefundStatus.FAILED)
+                        .transactionId(transactionId.toString())
+                        .errorMessage("Unsupported payment channel: " + paymentChannel)
+                        .build();
+            }
+
+            // Update transaction status if refund was successful
+            if (refundResponse.getStatus() == RefundStatus.COMPLETED) {
+                transaction.setStatus("REFUNDED");
+                paymentTransactionRepository.save(transaction);
+                log.info("Transaction {} marked as REFUNDED", transactionId);
+            }
+
+            // Set transaction ID in response
+            refundResponse.setTransactionId(transactionId.toString());
+
+            return refundResponse;
+
+        } catch (Exception e) {
+            log.error("Error processing refund for transaction {}: {}", transactionId, e.getMessage(), e);
+            return RefundResponse.builder()
+                    .status(RefundStatus.FAILED)
+                    .transactionId(transactionId.toString())
+                    .errorMessage("Refund processing failed: " + e.getMessage())
+                    .build();
+        }
+    }
+
+    /**
+     * Maps PayPal refund status to internal RefundStatus.
+     */
+    private RefundStatus mapPayPalRefundStatus(String paypalStatus) {
+        if (paypalStatus == null) {
+            return RefundStatus.PENDING;
+        }
+        switch (paypalStatus.toUpperCase()) {
+            case "COMPLETED":
+                return RefundStatus.COMPLETED;
+            case "PENDING":
+                return RefundStatus.PENDING;
+            case "FAILED":
+                return RefundStatus.FAILED;
+            case "CANCELLED":
+                return RefundStatus.CANCELLED;
+            default:
+                return RefundStatus.PROCESSING;
+        }
     }
 }

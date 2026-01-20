@@ -2,6 +2,8 @@ package com.fusionxpay.payment.controller;
 
 import com.fusionxpay.payment.dto.PaymentRequest;
 import com.fusionxpay.payment.dto.PaymentResponse;
+import com.fusionxpay.payment.dto.RefundRequest;
+import com.fusionxpay.payment.dto.RefundResponse;
 import com.fusionxpay.payment.service.PaymentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -53,5 +55,13 @@ public class PaymentController {
         log.info("Get available payment providers");
         List<String> providers = paymentService.getAvailablePaymentProviders();
         return ResponseEntity.ok(providers);
+    }
+
+    @PostMapping("/refund")
+    @Operation(summary = "Initiate a refund", description = "Processes a refund for an existing payment transaction")
+    public ResponseEntity<RefundResponse> initiateRefund(@Valid @RequestBody RefundRequest refundRequest) {
+        log.info("Refund request received for transaction: {}", refundRequest.getTransactionId());
+        RefundResponse response = paymentService.initiateRefund(refundRequest);
+        return ResponseEntity.ok(response);
     }
 }

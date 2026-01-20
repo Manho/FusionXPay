@@ -9,6 +9,7 @@ target/
 *.lst
 *.dumpstream
 *.dump
+scripts
 
 # Java class files and packaging artifacts
 *.class
@@ -18,6 +19,7 @@ target/
 
 # Visual Studio Code
 .vscode/
+.claude
 
 # OS-specific files
 .DS_Store
