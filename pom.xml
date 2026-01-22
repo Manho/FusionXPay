@@ -16,6 +16,7 @@
         <module>services/order-service</module>
         <module>services/payment-service</module>
         <module>services/notification-service</module>
+        <module>services/admin-service</module>
     </modules>
 
     <properties>

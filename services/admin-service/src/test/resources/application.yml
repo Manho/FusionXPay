@@ -1,0 +1,28 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    database-platform: org.hibernate.dialect.H2Dialect
+
+jwt:
+  secret: fusionxpay-admin-jwt-secret-key-must-be-at-least-256-bits-long-for-testing
+  expiration: 86400000
+
+services:
+  order-service:
+    url: http://localhost:8082
+
+eureka:
+  client:
+    enabled: false
+
+logging:
+  level:
+    root: WARN
+    com.fusionxpay.admin: DEBUG
