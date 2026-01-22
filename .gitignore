@@ -19,7 +19,9 @@ scripts
 
 # Visual Studio Code
 .vscode/
-.claude
+
+# Claude Code
+.claude/
 
 # OS-specific files
 .DS_Store
