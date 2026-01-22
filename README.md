@@ -1,55 +1,241 @@
-# FusionXPay
+<p align="center">
+  <img src="docs/design/diagrams/logo.svg" alt="FusionXPay Logo" width="120" height="120">
+</p>
 
-FusionXPay is an enterprise-grade, microservices-based payment gateway platform designed to simplify multi-channel payment integrations. It consolidates multiple payment providers (e.g., Stripe, PayPal) into a single RESTful API, ensuring secure, scalable, and resilient payment processing. This repository contains all the source code, configuration, and documentation needed to build, test, and deploy the system.
+<h1 align="center">FusionXPay</h1>
 
----
+<p align="center">
+  <strong>Enterprise-Grade Microservices Payment Gateway Platform</strong>
+</p>
 
-## Table of Contents
+<p align="center">
+  <a href="#features">Features</a> •
+  <a href="#quick-start">Quick Start</a> •
+  <a href="#architecture">Architecture</a> •
+  <a href="#api-reference">API</a> •
+  <a href="#documentation">Docs</a> •
+  <a href="#contributing">Contributing</a>
+</p>
 
-- [FusionXPay](#fusionxpay)
-  - [Table of Contents](#table-of-contents)
-  - [Overview](#overview)
-  - [Architecture](#architecture)
-  - [Project Structure](#project-structure)
-  - [Services Overview](#services-overview)
-    - [API Gateway](#api-gateway)
-    - [Order Service](#order-service)
-    - [Payment Service](#payment-service)
-    - [Notification Service](#notification-service)
-    - [Common Module](#common-module)
-  - [Getting Started](#getting-started)
-    - [Prerequisites](#prerequisites)
-    - [Running Locally](#running-locally)
-  - [Configuration](#configuration)
-  - [Development and Testing](#development-and-testing)
-  - [Docker and Deployment](#docker-and-deployment)
-  - [CI/CD Pipeline](#cicd-pipeline)
-  - [Contributing](#contributing)
-  - [License](#license)
+<p align="center">
+  <img src="https://img.shields.io/badge/Java-17-orange?style=flat-square&logo=openjdk" alt="Java 17">
+  <img src="https://img.shields.io/badge/Spring%20Boot-3.2-brightgreen?style=flat-square&logo=springboot" alt="Spring Boot 3.2">
+  <img src="https://img.shields.io/badge/License-MIT-blue?style=flat-square" alt="MIT License">
+  <img src="https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square" alt="PRs Welcome">
+</p>
 
 ---
 
 ## Overview
 
-FusionXPay was built to address the challenges enterprises face when managing multiple payment channels. Its core goals include:
+**FusionXPay** is a production-ready payment gateway platform that unifies multiple payment providers (Stripe, PayPal, and more) into a single, elegant RESTful API. Built with enterprise requirements in mind, it provides secure, scalable, and resilient payment processing for businesses of all sizes.
 
-- **Multi-Channel Integration:** A single integration point for various payment providers.
-- **End-to-End Transaction Management:** From order creation and payment initiation to callback handling and auditing.
-- **Security & Compliance:** Incorporating HMAC/token-based validations, HTTPS enforcement, and logging for traceability.
-- **Scalability & Resilience:** A microservices architecture with asynchronous communication, ensuring high availability even under heavy loads.
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Your Application                          │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     FusionXPay Gateway                           │
+│  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────────────────┐ │
+│  │ Stripe  │  │ PayPal  │  │ Alipay  │  │  More Providers...  │ │
+│  └─────────┘  └─────────┘  └─────────┘  └─────────────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Features
+
+<table>
+<tr>
+<td width="50%">
+
+### 🔌 Multi-Provider Integration
+- **Stripe** - Cards, wallets, local payments
+- **PayPal** - OAuth 2.0, Orders API v2
+- Extensible provider architecture
+
+### 💰 Complete Payment Lifecycle
+- Payment initiation & processing
+- Webhook handling with signature verification
+- Full refund support
+- Idempotent operations
+
+</td>
+<td width="50%">
+
+### 🏗️ Enterprise Architecture
+- Microservices with Spring Cloud
+- Event-driven with RabbitMQ
+- Service discovery with Eureka
+- Circuit breaker patterns
+
+### 🔒 Security & Compliance
+- HMAC signature validation
+- JWT authentication
+- Role-based access control
+- PCI-DSS ready architecture
+
+</td>
+</tr>
+</table>
+
+---
+
+## Quick Start
+
+### Prerequisites
+
+| Requirement | Version |
+|-------------|---------|
+| Java | 17+ |
+| Maven | 3.6+ |
+| Docker | 20.10+ |
+| Docker Compose | 2.0+ |
+
+### 1. Clone & Configure
+
+```bash
+git clone https://github.com/Manho/FusionXPay.git
+cd FusionXPay
+
+# Copy environment template
+cp .env.example .env
+
+# Edit .env with your payment provider credentials
+# STRIPE_API_KEY=sk_test_xxx
+# PAYPAL_CLIENT_ID=xxx
+# PAYPAL_CLIENT_SECRET=xxx
+```
+
+### 2. Start Infrastructure
+
+```bash
+# Start MySQL, Redis, RabbitMQ via Docker
+docker-compose up -d mysql redis rabbitmq
+```
+
+### 3. Run Services
+
+```bash
+# Option A: Use the startup script
+./scripts/run-all.sh
+
+# Option B: Run with Maven
+mvn clean install -DskipTests
+mvn spring-boot:run -pl services/eureka-server
+mvn spring-boot:run -pl services/api-gateway
+mvn spring-boot:run -pl services/order-service
+mvn spring-boot:run -pl services/payment-service
+mvn spring-boot:run -pl services/notification-service
+mvn spring-boot:run -pl services/admin-service
+```
+
+### 4. Verify Installation
+
+```bash
+# Check Eureka Dashboard
+open http://localhost:8761
+
+# Test API Gateway
+curl http://localhost:8080/actuator/health
+```
 
 ---
 
 ## Architecture
 
-FusionXPay leverages modern design principles to ensure a robust and flexible payment platform:
+```
+                                    ┌──────────────────┐
+                                    │   API Gateway    │
+                                    │    (Port 8080)   │
+                                    └────────┬─────────┘
+                                             │
+                    ┌────────────────────────┼────────────────────────┐
+                    │                        │                        │
+                    ▼                        ▼                        ▼
+           ┌───────────────┐        ┌───────────────┐        ┌───────────────┐
+           │ Order Service │        │Payment Service│        │ Admin Service │
+           │  (Port 8082)  │        │  (Port 8081)  │        │  (Port 8084)  │
+           └───────┬───────┘        └───────┬───────┘        └───────────────┘
+                   │                        │
+                   │    ┌───────────────────┤
+                   │    │                   │
+                   ▼    ▼                   ▼
+           ┌───────────────┐        ┌───────────────┐
+           │   RabbitMQ    │        │    Redis      │
+           │  (Port 5672)  │        │  (Port 6379)  │
+           └───────────────┘        └───────────────┘
+                   │
+                   ▼
+           ┌───────────────┐        ┌───────────────┐
+           │ Notification  │        │    MySQL      │
+           │   Service     │        │  (Port 3306)  │
+           │  (Port 8083)  │        └───────────────┘
+           └───────────────┘
+```
 
-- **Microservices-Based:** Each major function (API Gateway, Order Service, Payment Service, Notification Service) is encapsulated in its own service.
-- **Cloud-Native & Containerized:** Built to run in Docker containers, easily orchestrated with Kubernetes.
-- **Asynchronous Communication:** Utilizes message queues (Kafka) to decouple services and improve resilience.
-- **Observability & Security:** Integrated logging, monitoring, and distributed tracing alongside robust security measures like HTTPS, signature validations, and potential future PCI-DSS compliance.
+### Service Overview
 
-For an in-depth look at the system’s architecture, please refer to the [Architecture Design Document](./docs/design/architecture.md) and [Process Flow Document](./docs/design/process-flow.md).
+| Service | Port | Description |
+|---------|------|-------------|
+| **API Gateway** | 8080 | Request routing, rate limiting, authentication |
+| **Eureka Server** | 8761 | Service discovery and registration |
+| **Order Service** | 8082 | Order lifecycle management |
+| **Payment Service** | 8081 | Payment processing, provider integration |
+| **Notification Service** | 8083 | Async notification delivery |
+| **Admin Service** | 8084 | Merchant dashboard API |
+
+---
+
+## API Reference
+
+### Create Order
+
+```bash
+POST /api/orders
+Content-Type: application/json
+
+{
+  "amount": 99.99,
+  "currency": "USD",
+  "description": "Premium Subscription",
+  "metadata": {
+    "customer_id": "cust_123"
+  }
+}
+```
+
+### Initiate Payment
+
+```bash
+POST /api/payment/request
+Content-Type: application/json
+
+{
+  "orderId": "ord_abc123",
+  "provider": "stripe",
+  "returnUrl": "https://yoursite.com/success",
+  "cancelUrl": "https://yoursite.com/cancel"
+}
+```
+
+### Process Refund
+
+```bash
+POST /api/payment/refund
+Content-Type: application/json
+
+{
+  "orderId": "ord_abc123",
+  "amount": 50.00,
+  "reason": "Customer request"
+}
+```
+
+> 📖 For complete API documentation, see [API Reference](./docs/api/README.md)
 
 ---
 
@@ -57,165 +243,129 @@ For an in-depth look at the system’s architecture, please refer to the [Archit
 
 ```
 FusionXPay/
-├── docs/                  
-│   ├── design/           # Design documents and diagrams
-│   │   ├── architecture.md
-│   │   ├── process-flow.md
-│   │   └── diagrams/     
-│   └── requirements/     # Requirements specification
-│       └── requirements.md
-├── services/             # Microservices implementations
-│   ├── api-gateway/      
-│   ├── common/           
-│   ├── notification-service/
-│   ├── order-service/    
-│   └── payment-service/  
-├── scripts/              # Utility scripts (e.g., run-all.sh)
-├── docker-compose.yml    # Docker Compose configuration
-├── pom.xml               # Parent Maven project configuration
-└── README.md             # This file
+├── services/
+│   ├── api-gateway/          # Spring Cloud Gateway
+│   ├── eureka-server/        # Service Discovery
+│   ├── order-service/        # Order Management
+│   ├── payment-service/      # Payment Processing
+│   ├── notification-service/ # Notifications
+│   └── admin-service/        # Admin Dashboard API
+├── common/                   # Shared DTOs & Utils
+├── mysql-init/               # Database Initialization
+├── scripts/                  # Utility Scripts
+├── docs/
+│   ├── design/              # Architecture Docs
+│   ├── api/                 # API Documentation
+│   └── requirements/        # Requirements Spec
+└── docker-compose.yml       # Local Development
 ```
 
 ---
 
-## Services Overview
+## Tech Stack
 
-### API Gateway
-- **Role:** Entry point that routes incoming requests to the appropriate microservices.
-- **Technologies:** Spring Cloud Gateway, Eureka for service discovery.
-- **Key Features:** Rate limiting, authentication, logging, and request metadata correlation.
+<table>
+<tr>
+<td align="center" width="96">
+  <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/java/java-original.svg" width="48" height="48" alt="Java" />
+  <br>Java 17
+</td>
+<td align="center" width="96">
+  <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/spring/spring-original.svg" width="48" height="48" alt="Spring" />
+  <br>Spring Boot
+</td>
+<td align="center" width="96">
+  <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/mysql/mysql-original.svg" width="48" height="48" alt="MySQL" />
+  <br>MySQL
+</td>
+<td align="center" width="96">
+  <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/redis/redis-original.svg" width="48" height="48" alt="Redis" />
+  <br>Redis
+</td>
+<td align="center" width="96">
+  <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/docker/docker-original.svg" width="48" height="48" alt="Docker" />
+  <br>Docker
+</td>
+</tr>
+</table>
 
-### Order Service
-- **Role:** Manages order lifecycle—from creation to final status update.
-- **Endpoints:** 
-  - `POST /order/create` – Create a new order.
-  - `GET /order/{id}` – Retrieve order details.
-- **Technologies:** Spring Boot, JPA, MySQL.
-
-### Payment Service
-- **Role:** Processes payments and handles asynchronous callbacks from payment providers.
-- **Endpoints:**
-  - `POST /payment/request` – Initiate a payment.
-  - `POST /payment/callback` – Process payment provider callbacks.
-- **Technologies:** Spring Boot, JPA, integration with external payment APIs.
-
-### Notification Service
-- **Role:** Sends notifications based on order status changes.
-- **Endpoints:** For example, a simple endpoint to test notification delivery.
-- **Technologies:** Spring Boot, JPA, Redis, Kafka.
-
-### Common Module
-- **Role:** Shared components such as data transfer objects (DTOs) and utility classes.
-- **Usage:** Consumed by the microservices for consistent API responses and common logic.
-
----
-
-## Getting Started
-
-### Prerequisites
-
-- **Java 17**
-- **Maven 3.6+**
-- **Docker & Docker Compose**
-- **MySQL** (or use the provided MySQL Docker container)
-- **Redis** (or use the provided Docker container)
-- **Kafka & ZooKeeper** (via Docker)
-
-### Running Locally
-
-1. **Clone the repository:**
-
-   ```bash
-   git clone https://github.com/yourusername/FusionXPay.git
-   cd FusionXPay
-   ```
-
-2. **Initialize the database:**
-
-   The `docker-compose.yml` file includes a MySQL service that automatically executes the initialization script located in `./.mysql-init/init.sql`.
-
-3. **Run the services:**
-
-   You can start all services using the provided script:
-
-   ```bash
-   chmod +x scripts/run-all.sh
-   ./scripts/run-all.sh
-   ```
-
-   Alternatively, you can start all containers using Docker Compose:
-
-   ```bash
-   docker-compose up --build
-   ```
-
-4. **Accessing the APIs:**
-
-   - **API Gateway:** [http://localhost:8080](http://localhost:8080)
-   - **Order Service:** [http://localhost:8082/create-order](http://localhost:8082/create-order)
-   - **Payment Service:** [http://localhost:8081/create-payment](http://localhost:8081/create-payment)
-   - **Notification Service:** [http://localhost:8083/create-notification](http://localhost:8083/create-notification)
+**Core Technologies:**
+- **Framework:** Spring Boot 3.2, Spring Cloud 2023
+- **Database:** MySQL 8.0, Redis 7
+- **Messaging:** RabbitMQ
+- **Security:** Spring Security, JWT
+- **Build:** Maven
+- **Container:** Docker, Docker Compose
 
 ---
 
-## Configuration
+## Documentation
 
-- **Service Discovery:** Eureka is used for dynamic service registration and discovery.
-- **Database Configuration:** Each service has its own configuration in `application.yml` files pointing to the MySQL database.
-- **Message Queues:** Kafka is used for asynchronous messaging, decoupling communication between services.
-- **Environment Variables:** Copy `.env.example` to `.env` and set provider keys and infrastructure endpoints used by each service.
-- **Security & Resilience:** 
-  - HTTPS/TLS is enforced.
-  - Resilience4j is configured for circuit breaking.
-  - HMAC/token-based validation is used for secure callbacks.
-
-Detailed configurations for each service are available in their respective `src/main/resources/application.yml` files.
+| Document | Description |
+|----------|-------------|
+| [Architecture Design](./docs/design/architecture.md) | System architecture and design decisions |
+| [Process Flow](./docs/design/process-flow.md) | Payment flow diagrams |
+| [Requirements](./docs/requirements/requirements.md) | Functional requirements |
+| [API Reference](./docs/api/README.md) | API endpoints documentation |
 
 ---
 
-## Development and Testing
+## Development
 
-- **Building the Project:** Use Maven to build the entire project from the parent directory.
+### Running Tests
 
-  ```bash
-  mvn clean install
-  ```
+```bash
+# Run all tests
+mvn test
 
-- **Running Tests:** Each microservice includes its own suite of tests. Run tests with:
+# Run specific service tests
+mvn test -pl services/payment-service
 
-  ```bash
-  mvn test
-  ```
+# Run with coverage report
+mvn test jacoco:report
+```
+
+### Code Quality
+
+```bash
+# Check code style
+mvn checkstyle:check
+
+# Run static analysis
+mvn spotbugs:check
+```
 
 ---
 
-## Docker and Deployment
+## Roadmap
 
-FusionXPay is containerized and can be deployed using Docker and Kubernetes. The included `docker-compose.yml` provides a local development environment with services for MySQL, Redis, Kafka, and Eureka.
-
-For production deployments:
-- Use Kubernetes with Helm charts for orchestration.
-- Leverage rolling updates and auto-scaling to ensure zero downtime.
-- Integrate with your CI/CD pipeline for automated builds and deployments.
-
----
-
-## CI/CD Pipeline
-
-The project is designed for continuous integration and continuous deployment:
-- **Source Control:** Git-based branching with pull requests and code reviews.
-- **Automated Testing:** Integration with Maven and your preferred CI tool (e.g., GitHub Actions, Jenkins).
-- **Containerization:** Each service is built into a Docker container.
-- **Deployment:** Automated deployments to staging and production environments using Kubernetes.
+- [x] **Phase 1:** Core Payment Integration (Stripe, PayPal)
+- [x] **Phase 2:** Admin Dashboard MVP
+- [ ] **Phase 3:** Analytics & Reporting
+- [ ] **Phase 4:** Additional Payment Providers (Alipay, WeChat Pay)
+- [ ] **Phase 5:** Subscription & Recurring Payments
 
 ---
 
 ## Contributing
 
-Contributions are welcome! Please refer to the [CONTRIBUTING.md](./CONTRIBUTING.md) file for guidelines on how to contribute to FusionXPay.
+We welcome contributions! Please see our [Contributing Guide](./CONTRIBUTING.md) for details.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ---
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](./LICENSE) file for details.
+This project is licensed under the MIT License - see the [LICENSE](./LICENSE) file for details.
+
+---
+
+<p align="center">
+  <a href="https://github.com/Manho/FusionXPay/issues">Report Bug</a> •
+  <a href="https://github.com/Manho/FusionXPay/issues">Request Feature</a>
+</p>
