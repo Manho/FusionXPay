@@ -11,9 +11,11 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.fusionxpay.order.constant.ApiResponseCodes;
+import com.fusionxpay.order.dto.OrderPageResponse;
 import com.fusionxpay.order.dto.OrderRequest;
 import com.fusionxpay.order.dto.OrderResponse;
 import com.fusionxpay.order.exception.OrderNotFoundException;
@@ -38,7 +40,29 @@ import lombok.extern.slf4j.Slf4j;
 public class OrderController {
 
     private final OrderService orderService;
-    
+
+    /**
+     * Get paginated list of orders with optional filters
+     */
+    @GetMapping
+    @Operation(summary = "Get orders with pagination", description = "Returns a paginated list of orders with optional filters")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = ApiResponseCodes.OK, description = "Orders retrieved successfully"),
+        @ApiResponse(responseCode = ApiResponseCodes.INTERNAL_SERVER_ERROR, description = "Internal server error")
+    })
+    public ResponseEntity<OrderPageResponse> getOrders(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) Long merchantId,
+            @RequestParam(required = false) String orderNumber) {
+        log.info("Received get orders request - page: {}, size: {}, status: {}, merchantId: {}",
+                page, size, status, merchantId);
+
+        OrderPageResponse response = orderService.getOrders(page, size, status, merchantId, orderNumber);
+        return ResponseEntity.ok(response);
+    }
+
     @PostMapping
     @Operation(summary = "Create a new order", description = "Creates a new order with the given order request details")
     @ApiResponses(value = {

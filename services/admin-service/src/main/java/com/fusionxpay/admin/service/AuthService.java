@@ -14,6 +14,7 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
 /**
@@ -79,5 +80,43 @@ public class AuthService {
         Merchant merchant = merchantRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("Merchant not found"));
         return MerchantInfo.fromEntity(merchant);
+    }
+
+    /**
+     * Register a new merchant
+     */
+    public LoginResponse register(com.fusionxpay.admin.dto.RegisterRequest request) {
+        if (merchantRepository.findByEmail(request.getEmail()).isPresent()) {
+            throw new RuntimeException("Email already exists");
+        }
+
+        if (merchantRepository.findByMerchantCode(request.getMerchantCode()).isPresent()) {
+            throw new RuntimeException("Merchant code already exists");
+        }
+
+        // Create new merchant
+        Merchant merchant = Merchant.builder()
+                .merchantName(request.getMerchantName())
+                .email(request.getEmail())
+                .merchantCode(request.getMerchantCode())
+                .passwordHash(new BCryptPasswordEncoder().encode(request.getPassword()))
+                .role(com.fusionxpay.admin.model.MerchantRole.MERCHANT)
+                .status(MerchantStatus.ACTIVE)
+                .build();
+
+        merchant = merchantRepository.save(merchant);
+
+        // Generate token
+        String token = jwtTokenProvider.generateToken(
+                merchant.getId(),
+                merchant.getEmail(),
+                merchant.getRole().name()
+        );
+
+        return LoginResponse.of(
+                token,
+                jwtTokenProvider.getExpirationInSeconds(),
+                MerchantInfo.fromEntity(merchant)
+        );
     }
 }

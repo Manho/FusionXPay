@@ -45,4 +45,13 @@ public class AuthController {
         MerchantInfo merchantInfo = authService.getMerchantByEmail(email);
         return ResponseEntity.ok(merchantInfo);
     }
+
+    /**
+     * Merchant registration (Temporary for development)
+     */
+    @PostMapping("/register")
+    @Operation(summary = "Merchant register", description = "Register new merchant")
+    public ResponseEntity<LoginResponse> register(@Valid @RequestBody com.fusionxpay.admin.dto.RegisterRequest request) {
+        return ResponseEntity.ok(authService.register(request));
+    }
 }

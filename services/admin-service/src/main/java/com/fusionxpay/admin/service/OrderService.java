@@ -96,7 +96,7 @@ public class OrderService {
         log.info("Fetching order by ID: {} - isAdmin: {}, merchantId: {}", orderId, isAdmin, merchantId);
 
         try {
-            String url = orderServiceUrl + "/api/orders/" + orderId;
+            String url = orderServiceUrl + "/api/orders/id/" + orderId;
 
             ResponseEntity<OrderResponse> response = restTemplate.exchange(
                     url,

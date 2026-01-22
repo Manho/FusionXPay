@@ -1,5 +1,6 @@
 package com.fusionxpay.order.service;
 
+import com.fusionxpay.order.dto.OrderPageResponse;
 import com.fusionxpay.order.dto.OrderRequest;
 import com.fusionxpay.order.dto.OrderResponse;
 import com.fusionxpay.order.exception.OrderNotFoundException;
@@ -8,10 +9,16 @@ import com.fusionxpay.order.repository.OrderRepository;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -46,6 +53,37 @@ public class OrderService {
         log.info("Order created successfully with orderId: {} and number: {}", savedOrder.getOrderId(), savedOrder.getOrderNumber());
         
         return mapToOrderResponse(savedOrder);
+    }
+
+    /**
+     * Get paginated list of orders with optional filters
+     */
+    @Transactional(readOnly = true)
+    public OrderPageResponse getOrders(int page, int size, String status, Long merchantId, String orderNumber) {
+        log.info("Fetching orders - page: {}, size: {}, status: {}, merchantId: {}, orderNumber: {}",
+                page, size, status, merchantId, orderNumber);
+
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+
+        // Use flexible filtering query
+        String statusFilter = (status != null && !status.isEmpty()) ? status : null;
+        String orderNumberFilter = (orderNumber != null && !orderNumber.isEmpty()) ? orderNumber : null;
+
+        Page<Order> orderPage = orderRepository.findWithFilters(statusFilter, merchantId, orderNumberFilter, pageable);
+
+        List<OrderResponse> orders = orderPage.getContent().stream()
+                .map(this::mapToOrderResponse)
+                .collect(Collectors.toList());
+
+        return OrderPageResponse.builder()
+                .orders(orders)
+                .page(orderPage.getNumber())
+                .size(orderPage.getSize())
+                .totalElements(orderPage.getTotalElements())
+                .totalPages(orderPage.getTotalPages())
+                .first(orderPage.isFirst())
+                .last(orderPage.isLast())
+                .build();
     }
 
     @Transactional(readOnly = true)
