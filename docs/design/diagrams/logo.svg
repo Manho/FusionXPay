@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none">
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1a2e"/>
+      <stop offset="50%" style="stop-color:#16213e"/>
+      <stop offset="100%" style="stop-color:#0f0f23"/>
+    </linearGradient>
+    <linearGradient id="accentGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00d9ff"/>
+      <stop offset="100%" style="stop-color:#00ff88"/>
+    </linearGradient>
+    <linearGradient id="fGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff"/>
+      <stop offset="100%" style="stop-color:#e0e0e0"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background circle with dark gradient -->
+  <circle cx="60" cy="60" r="58" fill="url(#bgGradient)" stroke="url(#accentGradient)" stroke-width="2"/>
+
+  <!-- Subtle inner ring -->
+  <circle cx="60" cy="60" r="50" fill="none" stroke="#00d9ff" stroke-width="0.5" opacity="0.3"/>
+
+  <!-- F letter stylized -->
+  <path d="M38 32 L78 32 L78 40 L48 40 L48 54 L70 54 L70 62 L48 62 L48 88 L38 88 Z" fill="url(#fGradient)"/>
+
+  <!-- X mark with glow effect -->
+  <g filter="url(#glow)">
+    <path d="M62 64 L84 86" stroke="url(#accentGradient)" stroke-width="7" stroke-linecap="round"/>
+    <path d="M84 64 L62 86" stroke="url(#accentGradient)" stroke-width="7" stroke-linecap="round"/>
+  </g>
+
+  <!-- Accent dots with glow -->
+  <circle cx="28" cy="60" r="3" fill="#00d9ff" filter="url(#glow)"/>
+  <circle cx="92" cy="38" r="2.5" fill="#00ff88" opacity="0.8"/>
+  <circle cx="90" cy="50" r="1.5" fill="#00d9ff" opacity="0.6"/>
+  <circle cx="75" cy="28" r="2" fill="#00ff88" opacity="0.5"/>
+</svg>
