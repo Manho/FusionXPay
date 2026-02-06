@@ -54,7 +54,7 @@ class AuthControllerTest {
         request.setPassword(password);
 
         webTestClient.post()
-                .uri("/auth/register")
+                .uri("/api/v1/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(request)
                 .exchange()
@@ -87,7 +87,7 @@ class AuthControllerTest {
         request.setPassword(password);
 
         webTestClient.post()
-                .uri("/auth/register")
+                .uri("/api/v1/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(request)
                 .exchange()
@@ -115,7 +115,7 @@ class AuthControllerTest {
         request.setPassword(password);
 
         webTestClient.post()
-                .uri("/auth/login")
+                .uri("/api/v1/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(request)
                 .exchange()
@@ -145,7 +145,7 @@ class AuthControllerTest {
         request.setPassword("wrong-password");
 
         webTestClient.post()
-                .uri("/auth/login")
+                .uri("/api/v1/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(request)
                 .exchange()
@@ -160,7 +160,7 @@ class AuthControllerTest {
         request.setPassword("");
 
         webTestClient.post()
-                .uri("/auth/register")
+                .uri("/api/v1/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(request)
                 .exchange()

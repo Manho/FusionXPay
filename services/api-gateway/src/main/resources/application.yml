@@ -27,19 +27,19 @@ spring:
           predicates:
             - Path=/order-service/**
           filters:
-            - RewritePath=/order-service/(?<segment>.*), /api/${segment}
+            - RewritePath=/order-service/(?<segment>.*), /api/v1/${segment}
         - id: payment-service
           uri: lb://payment-service
           predicates:
             - Path=/payment-service/**
           filters:
-            - RewritePath=/payment-service/(?<segment>.*), /api/${segment}
+            - RewritePath=/payment-service/(?<segment>.*), /api/v1/${segment}
         - id: notification-service
           uri: lb://notification-service
           predicates:
             - Path=/notification-service/**
           filters:
-            - RewritePath=/notification-service/(?<segment>.*), /api/${segment}
+            - RewritePath=/notification-service/(?<segment>.*), /api/v1/${segment}
 
 eureka:
   client:
