@@ -75,7 +75,7 @@ class OrderApplicationTests {
     @DisplayName("Create order endpoint returns correct response")
     void createOrderEndpoint() throws Exception {
         // Perform the request
-        MvcResult result = mockMvc.perform(post("/api/orders")
+        MvcResult result = mockMvc.perform(post("/api/v1/orders")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(orderRequest)))
                 .andExpect(status().isCreated())
@@ -101,7 +101,7 @@ class OrderApplicationTests {
         assertNotNull(createdOrder.getOrderId());
 
         // Then retrieve it by ID
-        mockMvc.perform(get("/api/orders/id/" + createdOrder.getOrderId()))
+        mockMvc.perform(get("/api/v1/orders/id/" + createdOrder.getOrderId()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.orderId").value(createdOrder.getOrderId().toString()))
                 .andExpect(jsonPath("$.orderNumber").value(createdOrder.getOrderNumber()))
@@ -119,7 +119,7 @@ class OrderApplicationTests {
         assertNotNull(createdOrder.getOrderNumber());
 
         // Then retrieve it by order number
-        mockMvc.perform(get("/api/orders/" + createdOrder.getOrderNumber()))
+        mockMvc.perform(get("/api/v1/orders/" + createdOrder.getOrderNumber()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.orderId").value(createdOrder.getOrderId().toString()))
                 .andExpect(jsonPath("$.orderNumber").value(createdOrder.getOrderNumber()))
