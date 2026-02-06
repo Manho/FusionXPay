@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.*;
  * Order Controller - handles order queries with role-based access control
  */
 @RestController
-@RequestMapping("/api/admin/orders")
+@RequestMapping("/api/v1/admin/orders")
 @RequiredArgsConstructor
 @Tag(name = "Orders", description = "Order management endpoints")
 public class OrderController {

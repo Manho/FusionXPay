@@ -48,12 +48,12 @@ class NotificationControllerTest {
                 .eventType("PAYMENT_CONFIRMATION")
                 .build();
 
-        mockMvc.perform(post("/api/notifications")
+        mockMvc.perform(post("/api/v1/notifications")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(message)))
                 .andExpect(status().isAccepted());
 
-        mockMvc.perform(get("/api/notifications"))
+        mockMvc.perform(get("/api/v1/notifications"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].content").value("Notification content"));
     }
@@ -70,7 +70,7 @@ class NotificationControllerTest {
 
         NotificationMessage saved = notificationRepository.save(message);
 
-        mockMvc.perform(get("/api/notifications/" + saved.getId()))
+        mockMvc.perform(get("/api/v1/notifications/" + saved.getId()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(saved.getId()))
                 .andExpect(jsonPath("$.content").value("Notification content"));
@@ -79,7 +79,7 @@ class NotificationControllerTest {
     @Test
     @DisplayName("Get notification by ID returns 404 when missing")
     void getNotificationById_NotFound() throws Exception {
-        mockMvc.perform(get("/api/notifications/999999"))
+        mockMvc.perform(get("/api/v1/notifications/999999"))
                 .andExpect(status().isNotFound());
     }
 
@@ -95,10 +95,10 @@ class NotificationControllerTest {
 
         NotificationMessage saved = notificationRepository.save(message);
 
-        mockMvc.perform(delete("/api/notifications/" + saved.getId()))
+        mockMvc.perform(delete("/api/v1/notifications/" + saved.getId()))
                 .andExpect(status().isNoContent());
 
-        mockMvc.perform(get("/api/notifications/" + saved.getId()))
+        mockMvc.perform(get("/api/v1/notifications/" + saved.getId()))
                 .andExpect(status().isNotFound());
     }
 }
