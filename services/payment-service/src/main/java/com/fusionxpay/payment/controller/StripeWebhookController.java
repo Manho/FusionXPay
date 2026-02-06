@@ -9,7 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/payment/webhook/stripe")
+@RequestMapping("/api/v1/payment/webhook/stripe")
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Stripe Webhook", description = "Stripe webhook endpoints")

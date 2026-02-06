@@ -75,7 +75,7 @@ public class PaymentControllerUnitTest {
     void testGetAvailablePaymentProviders() throws Exception {
         when(paymentService.getAvailablePaymentProviders()).thenReturn(Arrays.asList("STRIPE", "PAYPAL"));
 
-        mockMvc.perform(get("/api/payment/providers"))
+        mockMvc.perform(get("/api/v1/payment/providers"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(2)))
                 .andExpect(jsonPath("$[0]").value("STRIPE"))
@@ -86,7 +86,7 @@ public class PaymentControllerUnitTest {
     void testInitiatePayment() throws Exception {
         when(paymentService.initiatePayment(any(PaymentRequest.class))).thenReturn(paymentResponse);
 
-        mockMvc.perform(post("/api/payment/request")
+        mockMvc.perform(post("/api/v1/payment/request")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(paymentRequest)))
                 .andExpect(status().isOk())
@@ -100,7 +100,7 @@ public class PaymentControllerUnitTest {
     void testGetPaymentStatus() throws Exception {
         when(paymentService.getPaymentTransactionByOrderId(orderId)).thenReturn(paymentResponse);
 
-        mockMvc.perform(get("/api/payment/order/{orderId}", orderId))
+        mockMvc.perform(get("/api/v1/payment/order/{orderId}", orderId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.transactionId").value(transactionId.toString()))
                 .andExpect(jsonPath("$.orderId").value(orderId.toString()))
