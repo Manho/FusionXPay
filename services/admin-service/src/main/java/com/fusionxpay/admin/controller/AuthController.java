@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.*;
  * Authentication Controller - handles login and user info
  */
 @RestController
-@RequestMapping("/api/admin/auth")
+@RequestMapping("/api/v1/admin/auth")
 @RequiredArgsConstructor
 @Tag(name = "Authentication", description = "Merchant authentication endpoints")
 public class AuthController {

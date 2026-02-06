@@ -53,7 +53,7 @@ class AuthControllerTest {
         when(authService.login(any(LoginRequest.class))).thenReturn(response);
 
         // When/Then
-        mockMvc.perform(post("/api/admin/auth/login")
+        mockMvc.perform(post("/api/v1/admin/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
@@ -71,7 +71,7 @@ class AuthControllerTest {
                 .thenThrow(new BadCredentialsException("Invalid email or password"));
 
         // When/Then
-        mockMvc.perform(post("/api/admin/auth/login")
+        mockMvc.perform(post("/api/v1/admin/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isUnauthorized())
@@ -85,7 +85,7 @@ class AuthControllerTest {
         LoginRequest request = new LoginRequest("invalid-email", "password123");
 
         // When/Then
-        mockMvc.perform(post("/api/admin/auth/login")
+        mockMvc.perform(post("/api/v1/admin/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
@@ -99,7 +99,7 @@ class AuthControllerTest {
         LoginRequest request = new LoginRequest("test@example.com", "");
 
         // When/Then
-        mockMvc.perform(post("/api/admin/auth/login")
+        mockMvc.perform(post("/api/v1/admin/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
