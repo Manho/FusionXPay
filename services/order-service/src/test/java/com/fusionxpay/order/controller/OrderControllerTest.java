@@ -55,7 +55,7 @@ class OrderControllerTest {
                 .currency("USD")
                 .build();
 
-        mockMvc.perform(post("/api/orders")
+        mockMvc.perform(post("/api/v1/orders")
                 .contentType(MediaType.APPLICATION_JSON)
                 .accept(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(orderRequest)))
@@ -75,7 +75,7 @@ class OrderControllerTest {
                 .currency("USD")
                 .build());
 
-        mockMvc.perform(get("/api/orders/id/" + createdOrder.getOrderId())
+        mockMvc.perform(get("/api/v1/orders/id/" + createdOrder.getOrderId())
                 .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.orderId").value(createdOrder.getOrderId().toString()))
@@ -87,7 +87,7 @@ class OrderControllerTest {
     void getOrderById_NotFound() throws Exception {
         UUID orderId = UUID.randomUUID();
 
-        mockMvc.perform(get("/api/orders/id/" + orderId)
+        mockMvc.perform(get("/api/v1/orders/id/" + orderId)
                 .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status").value(404))
@@ -104,7 +104,7 @@ class OrderControllerTest {
                 .currency("USD")
                 .build());
 
-        mockMvc.perform(get("/api/orders/" + createdOrder.getOrderNumber())
+        mockMvc.perform(get("/api/v1/orders/" + createdOrder.getOrderNumber())
                 .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.orderId").value(createdOrder.getOrderId().toString()))
@@ -116,7 +116,7 @@ class OrderControllerTest {
     void getOrderByNumber_NotFound() throws Exception {
         String orderNumber = "ORD-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
 
-        mockMvc.perform(get("/api/orders/" + orderNumber)
+        mockMvc.perform(get("/api/v1/orders/" + orderNumber)
                 .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status").value(404))
@@ -133,7 +133,7 @@ class OrderControllerTest {
                 .currency("")
                 .build();
 
-        mockMvc.perform(post("/api/orders")
+        mockMvc.perform(post("/api/v1/orders")
                 .contentType(MediaType.APPLICATION_JSON)
                 .accept(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(invalidRequest)))
