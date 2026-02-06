@@ -23,6 +23,9 @@ scripts
 # Claude Code
 .claude/
 
+# Chinese PRD (personal reference only)
+docs/requirements/requirements-zh.md
+
 # OS-specific files
 .DS_Store
 Thumbs.db
