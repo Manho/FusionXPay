@@ -72,7 +72,7 @@ class PaymentControllerTest {
 
         when(paymentProviderFactory.getProvider("STRIPE")).thenReturn(paymentProvider);
 
-        mockMvc.perform(post("/api/payment/request")
+        mockMvc.perform(post("/api/v1/payment/request")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(paymentRequest)))
                 .andExpect(status().isOk())
@@ -93,7 +93,7 @@ class PaymentControllerTest {
         transaction.setStatus(PaymentStatus.PROCESSING.name());
         paymentTransactionRepository.save(transaction);
 
-        mockMvc.perform(get("/api/payment/order/{orderId}", orderId))
+        mockMvc.perform(get("/api/v1/payment/order/{orderId}", orderId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.orderId").value(orderId.toString()))
                 .andExpect(jsonPath("$.status").value("PROCESSING"));
@@ -110,7 +110,7 @@ class PaymentControllerTest {
         transaction.setStatus(PaymentStatus.PROCESSING.name());
         PaymentTransaction saved = paymentTransactionRepository.save(transaction);
 
-        mockMvc.perform(get("/api/payment/transaction/{transactionId}", saved.getTransactionId()))
+        mockMvc.perform(get("/api/v1/payment/transaction/{transactionId}", saved.getTransactionId()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.transactionId").value(saved.getTransactionId().toString()))
                 .andExpect(jsonPath("$.status").value("PROCESSING"));
@@ -119,7 +119,7 @@ class PaymentControllerTest {
     @Test
     @DisplayName("Get available payment providers returns list")
     void getAvailablePaymentProviders() throws Exception {
-        mockMvc.perform(get("/api/payment/providers"))
+        mockMvc.perform(get("/api/v1/payment/providers"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0]").value("STRIPE"))
                 .andExpect(jsonPath("$[1]").value("PAYPAL"));

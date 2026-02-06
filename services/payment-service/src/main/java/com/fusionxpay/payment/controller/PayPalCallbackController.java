@@ -23,7 +23,7 @@ import java.util.UUID;
  * @since 1.0.0
  */
 @RestController
-@RequestMapping("/api/payment/paypal")
+@RequestMapping("/api/v1/payment/paypal")
 @RequiredArgsConstructor
 @Slf4j
 public class PayPalCallbackController {
