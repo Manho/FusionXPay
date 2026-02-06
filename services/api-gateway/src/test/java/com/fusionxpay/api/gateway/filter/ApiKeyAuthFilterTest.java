@@ -46,7 +46,7 @@ class ApiKeyAuthFilterTest {
     void publicEndpointsAllowed() {
         TrackingFilterChain chain = new TrackingFilterChain();
         ServerWebExchange authExchange = MockServerWebExchange.from(
-                MockServerHttpRequest.get("/auth/login").build());
+                MockServerHttpRequest.get("/api/v1/auth/login").build());
 
         apiKeyAuthFilter.filter(authExchange, chain).block();
         assertTrue(chain.wasCalled());

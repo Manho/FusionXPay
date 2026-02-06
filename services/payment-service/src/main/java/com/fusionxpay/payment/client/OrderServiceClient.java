@@ -12,7 +12,7 @@ import java.util.UUID;
 @FeignClient(name = "order-service")
 public interface OrderServiceClient {
 
-    @PutMapping("/orders/{orderId}/status")
+    @PutMapping("/api/v1/orders/{orderId}/status")
     ResponseEntity<Void> updateOrderStatus(
             @PathVariable UUID orderId,
             @RequestBody OrderStatusUpdateRequest request
