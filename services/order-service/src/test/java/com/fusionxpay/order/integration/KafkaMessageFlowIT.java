@@ -35,7 +35,7 @@ import static org.awaitility.Awaitility.await;
  * Tests consumer behavior for payment events and idempotency.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-public class KafkaMessageFlowIntegrationTest extends AbstractIntegrationTest {
+public class KafkaMessageFlowIT extends AbstractIntegrationTest {
 
     @Autowired
     private OrderRepository orderRepository;

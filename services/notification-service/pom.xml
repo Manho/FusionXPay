@@ -135,6 +135,14 @@
             <version>2.2.0</version>
             <scope>test</scope>
         </dependency>
+        <!-- Common test utilities (test-jar) -->
+        <dependency>
+            <groupId>com.fusionxpay</groupId>
+            <artifactId>common</artifactId>
+            <version>1.0.0</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
 
       <dependency>
         <groupId>org.apache.commons</groupId>

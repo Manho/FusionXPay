@@ -34,7 +34,7 @@ import static org.awaitility.Awaitility.await;
  * Tests end-to-end Kafka message consumption and notification persistence.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-public class NotificationKafkaConsumerIntegrationTest extends AbstractIntegrationTest {
+public class NotificationKafkaConsumerIT extends AbstractIntegrationTest {
 
     private static final String ORDER_EVENTS_TOPIC = "order-events";
 

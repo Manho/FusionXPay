@@ -34,7 +34,7 @@ import static org.awaitility.Awaitility.await;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-public class IdempotencyIntegrationTest extends AbstractIntegrationTest {
+public class IdempotencyIT extends AbstractIntegrationTest {
 
     private static WireMockServer wireMockServer;
 

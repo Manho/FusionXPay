@@ -32,7 +32,7 @@ import static org.mockito.Mockito.when;
  * Integration tests for RBAC (Role-Based Access Control) in admin-service
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-public class AdminRBACIntegrationTest extends AbstractIntegrationTest {
+public class AdminRBACIT extends AbstractIntegrationTest {
 
     @Autowired
     private TestRestTemplate restTemplate;

@@ -21,7 +21,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * Tests valid and invalid state transitions and database consistency.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-public class OrderStateMachineIntegrationTest extends AbstractIntegrationTest {
+public class OrderStateMachineIT extends AbstractIntegrationTest {
 
     @Autowired
     private OrderService orderService;

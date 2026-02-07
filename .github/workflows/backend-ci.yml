@@ -66,7 +66,7 @@ jobs:
           SPRING_REDIS_PORT: 6379
 
       - name: Run smoke integration test
-        run: mvn verify -B -pl services/payment-service -Dit.test=PaymentFlowIntegrationTest -DskipUTs
+        run: mvn verify -B -pl services/payment-service -Dit.test=PaymentFlowIT -DskipTests
         env:
           SPRING_DATASOURCE_URL: jdbc:mysql://localhost:3306/fusionxpay_test
           SPRING_DATASOURCE_USERNAME: root

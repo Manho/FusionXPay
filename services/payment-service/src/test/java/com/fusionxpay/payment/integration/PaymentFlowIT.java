@@ -36,7 +36,7 @@ import static org.awaitility.Awaitility.await;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-public class PaymentFlowIntegrationTest extends AbstractIntegrationTest {
+public class PaymentFlowIT extends AbstractIntegrationTest {
 
     private static WireMockServer wireMockServer;
 

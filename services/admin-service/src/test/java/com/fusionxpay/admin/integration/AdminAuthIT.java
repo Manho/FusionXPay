@@ -24,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Integration tests for JWT authentication in admin-service
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-public class AdminAuthIntegrationTest extends AbstractIntegrationTest {
+public class AdminAuthIT extends AbstractIntegrationTest {
 
     @Autowired
     private TestRestTemplate restTemplate;

@@ -36,10 +36,10 @@ jobs:
             ${{ runner.os }}-maven-
 
       - name: Run all unit tests
-        run: mvn test -B -DskipITs
+        run: mvn test -B
 
       - name: Run all integration tests
-        run: mvn verify -B -DskipUTs
+        run: mvn verify -B -DskipTests
 
       - name: Generate coverage report
         run: mvn jacoco:report -B

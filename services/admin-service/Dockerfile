@@ -2,20 +2,14 @@
 FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /app
 
-# Copy parent pom and common module first (for dependency caching)
-COPY pom.xml /app/parent-pom.xml
-COPY common/pom.xml /app/common/pom.xml
-COPY common/src /app/common/src
+# Copy entire project for proper multi-module build
+COPY pom.xml ./pom.xml
+COPY common ./common
+COPY services ./services
 
-# Copy this service
-COPY services/admin-service/pom.xml /app/services/admin-service/pom.xml
-COPY services/admin-service/src /app/services/admin-service/src
-
-# Build
-WORKDIR /app
-RUN mvn -f parent-pom.xml install -pl common -am -DskipTests
-WORKDIR /app/services/admin-service
-RUN mvn package -DskipTests
+# Build common module first, then the target service
+RUN mvn install -pl common -am -DskipTests -q
+RUN mvn package -pl services/admin-service -am -DskipTests -q
 
 # Stage 2: Runtime
 FROM eclipse-temurin:21-jre-alpine

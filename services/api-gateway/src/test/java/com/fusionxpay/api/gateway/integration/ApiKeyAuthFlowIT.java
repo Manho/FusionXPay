@@ -25,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Integration tests for API Key authentication flow in api-gateway
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-public class ApiKeyAuthFlowIntegrationTest extends AbstractIntegrationTest {
+public class ApiKeyAuthFlowIT extends AbstractIntegrationTest {
 
     @LocalServerPort
     private int port;
