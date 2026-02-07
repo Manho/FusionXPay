@@ -66,7 +66,7 @@ jobs:
           SPRING_REDIS_PORT: 6379
 
       - name: Run smoke integration test
-        run: mvn failsafe:integration-test failsafe:verify -B -pl services/payment-service -am -Dit.test=PaymentFlowIT
+        run: mvn failsafe:integration-test failsafe:verify -B -pl services/payment-service -am -Dit.test=PaymentFlowIT -Dfailsafe.failIfNoSpecifiedTests=false
         env:
           SPRING_DATASOURCE_URL: jdbc:mysql://localhost:3306/fusionxpay_test
           SPRING_DATASOURCE_USERNAME: root
@@ -79,5 +79,7 @@ jobs:
         if: failure()
         with:
           name: test-results
-          path: '**/target/surefire-reports/'
+          path: |
+            **/target/surefire-reports/
+            **/target/failsafe-reports/
           retention-days: 7
