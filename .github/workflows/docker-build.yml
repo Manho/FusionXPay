@@ -91,13 +91,15 @@ jobs:
 
       - name: Pull built images
         run: |
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
           for service in api-gateway payment-service order-service notification-service admin-service; do
-            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-${service}:latest
+            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-${service}:${SHORT_SHA}
           done
 
       - name: Verify images exist
         run: |
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
           for service in api-gateway payment-service order-service notification-service admin-service; do
-            docker image inspect ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-${service}:latest > /dev/null
-            echo "✓ ${service} image verified"
+            docker image inspect ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-${service}:${SHORT_SHA} > /dev/null
+            echo "✓ ${service} image (${SHORT_SHA}) verified"
           done

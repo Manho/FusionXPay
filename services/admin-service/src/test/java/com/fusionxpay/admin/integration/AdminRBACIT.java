@@ -102,27 +102,27 @@ public class AdminRBACIT extends AbstractIntegrationTest {
     private void setupMockOrderData() {
         // All orders (for ADMIN view)
         OrderResponse order1 = OrderResponse.builder()
-                .id("order-001")
+                .orderId("order-001")
                 .orderNumber("ORD-001")
-                .merchantId(merchant1Id)
+                .userId(merchant1Id)
                 .amount(new BigDecimal("100.00"))
                 .status("COMPLETED")
                 .createdAt(LocalDateTime.now())
                 .build();
 
         OrderResponse order2 = OrderResponse.builder()
-                .id("order-002")
+                .orderId("order-002")
                 .orderNumber("ORD-002")
-                .merchantId(merchant2Id)
+                .userId(merchant2Id)
                 .amount(new BigDecimal("200.00"))
                 .status("PENDING")
                 .createdAt(LocalDateTime.now())
                 .build();
 
         OrderResponse order3 = OrderResponse.builder()
-                .id("order-003")
+                .orderId("order-003")
                 .orderNumber("ORD-003")
-                .merchantId(merchant1Id)
+                .userId(merchant1Id)
                 .amount(new BigDecimal("150.00"))
                 .status("COMPLETED")
                 .createdAt(LocalDateTime.now())
@@ -241,7 +241,7 @@ public class AdminRBACIT extends AbstractIntegrationTest {
 
         // Verify all returned orders belong to merchant1
         response.getBody().getOrders().forEach(order -> {
-            assertThat(order.getMerchantId()).isEqualTo(merchant1Id);
+            assertThat(order.getUserId()).isEqualTo(merchant1Id);
         });
     }
 
@@ -295,9 +295,9 @@ public class AdminRBACIT extends AbstractIntegrationTest {
 
         // Verify no overlap in order IDs
         List<String> merchant1OrderIds = response1.getBody().getOrders()
-                .stream().map(OrderResponse::getId).toList();
+                .stream().map(OrderResponse::getOrderId).toList();
         List<String> merchant2OrderIds = response2.getBody().getOrders()
-                .stream().map(OrderResponse::getId).toList();
+                .stream().map(OrderResponse::getOrderId).toList();
 
         assertThat(merchant1OrderIds).doesNotContainAnyElementsOf(merchant2OrderIds);
     }
@@ -317,14 +317,14 @@ public class AdminRBACIT extends AbstractIntegrationTest {
                 "/api/v1/admin/orders/order-001", HttpMethod.GET, entity, OrderResponse.class);
 
         assertThat(response1.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response1.getBody().getMerchantId()).isEqualTo(merchant1Id);
+        assertThat(response1.getBody().getUserId()).isEqualTo(merchant1Id);
 
         // Access merchant2's order
         ResponseEntity<OrderResponse> response2 = restTemplate.exchange(
                 "/api/v1/admin/orders/order-002", HttpMethod.GET, entity, OrderResponse.class);
 
         assertThat(response2.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response2.getBody().getMerchantId()).isEqualTo(merchant2Id);
+        assertThat(response2.getBody().getUserId()).isEqualTo(merchant2Id);
     }
 
     @Test
@@ -343,8 +343,8 @@ public class AdminRBACIT extends AbstractIntegrationTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().getId()).isEqualTo("order-001");
-        assertThat(response.getBody().getMerchantId()).isEqualTo(merchant1Id);
+        assertThat(response.getBody().getOrderId()).isEqualTo("order-001");
+        assertThat(response.getBody().getUserId()).isEqualTo(merchant1Id);
     }
 
     @Test

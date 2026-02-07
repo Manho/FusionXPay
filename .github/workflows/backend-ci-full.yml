@@ -39,7 +39,7 @@ jobs:
         run: mvn test -B
 
       - name: Run all integration tests
-        run: mvn verify -B -DskipTests
+        run: mvn verify -B -Dsurefire.skip=true
 
       - name: Generate coverage report
         run: mvn jacoco:report -B
