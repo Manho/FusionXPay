@@ -26,7 +26,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @TestPropertySource(properties = {
     "eureka.client.enabled=false",
-    "spring.cloud.discovery.enabled=false"
+    "spring.cloud.discovery.enabled=false",
+    "spring.cloud.gateway.discovery.locator.enabled=false"
 })
 public class ApiKeyAuthFlowIT extends AbstractIntegrationTest {
 
