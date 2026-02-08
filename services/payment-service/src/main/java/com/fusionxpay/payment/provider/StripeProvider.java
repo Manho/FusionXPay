@@ -56,10 +56,10 @@ public class StripeProvider implements PaymentProvider {
     public void init() {
         Stripe.apiKey = apiKey;
         if (apiBaseUrl != null && !apiBaseUrl.isBlank()) {
-            Stripe.overrideApiBase = apiBaseUrl;
+            Stripe.overrideApiBase(apiBaseUrl);
             log.info("Stripe API base URL overridden to {}", apiBaseUrl);
         } else {
-            Stripe.overrideApiBase = null;
+            Stripe.overrideApiBase(Stripe.LIVE_API_BASE);
         }
         log.info("Stripe payment provider initialized");
     }
