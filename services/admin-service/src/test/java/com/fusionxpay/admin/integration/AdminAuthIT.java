@@ -90,7 +90,7 @@ public class AdminAuthIT extends AbstractIntegrationTest {
         assertThat(response.getBody().getToken()).isNotBlank();
         assertThat(response.getBody().getTokenType()).isEqualTo("Bearer");
         assertThat(response.getBody().getMerchant()).isNotNull();
-        assertThat(response.getBody().getMerchant().getRole()).isEqualTo("ADMIN");
+        assertThat(response.getBody().getMerchant().getRole()).isEqualTo(MerchantRole.ADMIN);
 
         // Verify token is valid
         String token = response.getBody().getToken();
@@ -119,7 +119,7 @@ public class AdminAuthIT extends AbstractIntegrationTest {
         assertThat(response.getBody().getToken()).isNotBlank();
         assertThat(response.getBody().getTokenType()).isEqualTo("Bearer");
         assertThat(response.getBody().getMerchant()).isNotNull();
-        assertThat(response.getBody().getMerchant().getRole()).isEqualTo("MERCHANT");
+        assertThat(response.getBody().getMerchant().getRole()).isEqualTo(MerchantRole.MERCHANT);
 
         // Verify token is valid
         String token = response.getBody().getToken();
