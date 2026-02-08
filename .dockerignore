@@ -1,0 +1,33 @@
+# Git
+.git
+.gitignore
+
+# IDE
+.idea
+*.iml
+.vscode
+
+# Build artifacts
+**/target/
+**/build/
+
+# Documentation
+*.md
+docs/
+
+# Environment files
+.env*
+*.env
+
+# Logs
+*.log
+logs/
+
+# Test files (for production builds)
+**/src/test/
+
+# Node modules (if any)
+node_modules/
+
+# Claude specific
+.claude/

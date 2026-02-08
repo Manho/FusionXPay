@@ -45,9 +45,14 @@ payment:
       secret-key: ${STRIPE_SECRET_KEY:test}
       webhook-secret: ${STRIPE_WEBHOOK_SECRET:test}
     paypal:
+      enabled: true
       client-id: ${PAYPAL_CLIENT_ID:test}
       client-secret: ${PAYPAL_CLIENT_SECRET:test}
       webhook-id: ${PAYPAL_WEBHOOK_ID:test}
+      mode: sandbox
+      base-url: https://api-m.sandbox.paypal.com
+      return-url: http://localhost:8081/api/payment/paypal/return
+      cancel-url: http://localhost:8081/api/payment/paypal/cancel
 
 resilience4j:
   circuitbreaker:
