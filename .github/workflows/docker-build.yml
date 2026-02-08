@@ -11,7 +11,8 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_PREFIX: ${{ github.repository_owner }}/fusionxpay
+  # Use lowercase for Docker registry compatibility
+  IMAGE_PREFIX: ${{ github.repository }}
 
 jobs:
   build:
@@ -58,6 +59,9 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ matrix.service }}
+          flavor: |
+            latest=auto
+            suffix=-${{ matrix.service }}
           tags: |
             type=ref,event=branch
             type=sha,prefix=
