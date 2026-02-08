@@ -27,6 +27,10 @@ services:
 eureka:
   client:
     enabled: false
+    register-with-eureka: false
+    fetch-registry: false
+
+spring.cloud.discovery.enabled: false
 
 logging:
   level:
