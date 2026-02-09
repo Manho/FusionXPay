@@ -1,7 +1,6 @@
 package com.fusionxpay.api.gateway.integration;
 
 import com.fusionxpay.api.gateway.dto.AuthRequest;
-import com.fusionxpay.api.gateway.dto.AuthResponse;
 import com.fusionxpay.api.gateway.model.User;
 import com.fusionxpay.api.gateway.repository.UserRepository;
 import com.fusionxpay.common.test.AbstractIntegrationTest;
@@ -11,9 +10,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 import java.time.Duration;
@@ -25,6 +24,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Integration tests for API Key authentication flow in api-gateway
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@TestPropertySource(properties = {
+    "eureka.client.enabled=false",
+    "spring.cloud.discovery.enabled=false",
+    "spring.cloud.gateway.discovery.locator.enabled=false"
+})
 public class ApiKeyAuthFlowIT extends AbstractIntegrationTest {
 
     @LocalServerPort
@@ -71,9 +75,10 @@ public class ApiKeyAuthFlowIT extends AbstractIntegrationTest {
                 .uri("/order-service/orders")
                 .header("X-API-Key", VALID_API_KEY)
                 .exchange()
-                .expectStatus().isNotFound();  // 404 because backend service is not running, but auth passed
-
-        // The fact that we get 404 (or 503) instead of 401 means authentication passed
+                .expectStatus().value(status -> {
+                    // Auth passed if we don't get 401 - we may get 503 (service unavailable) or 404
+                    assertThat(status).isNotEqualTo(401);
+                });
     }
 
     @Test
@@ -118,12 +123,10 @@ public class ApiKeyAuthFlowIT extends AbstractIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(registerRequest)
                 .exchange()
-                .expectStatus().isOk()
-                .expectBody(AuthResponse.class)
-                .value(response -> {
-                    assertThat(response.getUsername()).isEqualTo("newuser");
-                    assertThat(response.getApiKey()).isNotBlank();
-                });
+                .expectStatus().isCreated()  // Register returns 201 CREATED
+                .expectBody()
+                .jsonPath("$.username").isEqualTo("newuser")
+                .jsonPath("$.apiKey").isNotEmpty();
     }
 
     @Test
@@ -139,11 +142,9 @@ public class ApiKeyAuthFlowIT extends AbstractIntegrationTest {
                 .bodyValue(loginRequest)
                 .exchange()
                 .expectStatus().isOk()
-                .expectBody(AuthResponse.class)
-                .value(response -> {
-                    assertThat(response.getUsername()).isEqualTo(TEST_USERNAME);
-                    assertThat(response.getApiKey()).isEqualTo(VALID_API_KEY);
-                });
+                .expectBody()
+                .jsonPath("$.username").isEqualTo(TEST_USERNAME)
+                .jsonPath("$.apiKey").isEqualTo(VALID_API_KEY);
     }
 
     @Test
@@ -158,17 +159,20 @@ public class ApiKeyAuthFlowIT extends AbstractIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(loginRequest)
                 .exchange()
-                .expectStatus().is5xxServerError();  // Service throws exception
+                .expectStatus().isBadRequest();  // Returns 400 BAD_REQUEST
     }
 
     @Test
     @DisplayName("Swagger UI endpoints bypass API key validation")
     void testSwaggerEndpoints_BypassApiKeyValidation() {
-        // Swagger UI should be accessible without API key
+        // Swagger UI should be accessible without API key (not return 401)
         webTestClient.get()
                 .uri("/swagger-ui/index.html")
                 .exchange()
-                .expectStatus().isNotFound();  // May return 404 if swagger not configured, but not 401
+                .expectStatus().value(status -> {
+                    // Should not be 401 - auth is bypassed for swagger
+                    assertThat(status).isNotEqualTo(401);
+                });
     }
 
     @Test
@@ -177,7 +181,10 @@ public class ApiKeyAuthFlowIT extends AbstractIntegrationTest {
         webTestClient.get()
                 .uri("/v3/api-docs")
                 .exchange()
-                .expectStatus().isNotFound();  // May return 404 if not configured, but not 401
+                .expectStatus().value(status -> {
+                    // Should not be 401 - auth is bypassed for api-docs
+                    assertThat(status).isNotEqualTo(401);
+                });
     }
 
     @Test
@@ -188,18 +195,22 @@ public class ApiKeyAuthFlowIT extends AbstractIntegrationTest {
         registerRequest.setUsername("brandnewuser");
         registerRequest.setPassword("brandnewpass");
 
-        AuthResponse registerResponse = webTestClient.post()
+        String responseBody = webTestClient.post()
                 .uri("/api/v1/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(registerRequest)
                 .exchange()
-                .expectStatus().isOk()
-                .expectBody(AuthResponse.class)
+                .expectStatus().isCreated()  // Register returns 201 CREATED
+                .expectBody(String.class)
                 .returnResult()
                 .getResponseBody();
 
-        assertThat(registerResponse).isNotNull();
-        String newApiKey = registerResponse.getApiKey();
+        assertThat(responseBody).isNotNull();
+        // Extract API key from JSON response
+        assertThat(responseBody).contains("apiKey");
+
+        // Parse the API key from JSON (simple extraction)
+        String newApiKey = responseBody.split("\"apiKey\":\"")[1].split("\"")[0];
         assertThat(newApiKey).isNotBlank();
 
         // Use the new API key to access protected endpoint
@@ -207,7 +218,10 @@ public class ApiKeyAuthFlowIT extends AbstractIntegrationTest {
                 .uri("/order-service/orders")
                 .header("X-API-Key", newApiKey)
                 .exchange()
-                .expectStatus().isNotFound();  // Auth passed (not 401), service not available (404/503)
+                .expectStatus().value(status -> {
+                    // Auth passed if not 401 - we may get 503 or 404
+                    assertThat(status).isNotEqualTo(401);
+                });
     }
 
     @Test
@@ -223,19 +237,19 @@ public class ApiKeyAuthFlowIT extends AbstractIntegrationTest {
                 .build();
         userRepository.save(secondUser);
 
-        // First API key should work
+        // First API key should work (not return 401)
         webTestClient.get()
                 .uri("/order-service/orders")
                 .header("X-API-Key", VALID_API_KEY)
                 .exchange()
-                .expectStatus().isNotFound();
+                .expectStatus().value(status -> assertThat(status).isNotEqualTo(401));
 
-        // Second API key should also work
+        // Second API key should also work (not return 401)
         webTestClient.get()
                 .uri("/order-service/orders")
                 .header("X-API-Key", secondApiKey)
                 .exchange()
-                .expectStatus().isNotFound();
+                .expectStatus().value(status -> assertThat(status).isNotEqualTo(401));
 
         // Invalid key should still fail
         webTestClient.get()

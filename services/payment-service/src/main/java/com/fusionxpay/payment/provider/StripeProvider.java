@@ -37,6 +37,9 @@ public class StripeProvider implements PaymentProvider {
 
     @Value("${payment.providers.stripe.webhook-secret}")
     private String webhookSecret;
+
+    @Value("${payment.providers.stripe.api-base-url:}")
+    private String apiBaseUrl;
     
     // Redis configuration for idempotency
     private final RedisTemplate<String, String> redisTemplate;
@@ -52,6 +55,12 @@ public class StripeProvider implements PaymentProvider {
     @PostConstruct
     public void init() {
         Stripe.apiKey = apiKey;
+        if (apiBaseUrl != null && !apiBaseUrl.isBlank()) {
+            Stripe.overrideApiBase(apiBaseUrl);
+            log.info("Stripe API base URL overridden to {}", apiBaseUrl);
+        } else {
+            Stripe.overrideApiBase(Stripe.LIVE_API_BASE);
+        }
         log.info("Stripe payment provider initialized");
     }
 

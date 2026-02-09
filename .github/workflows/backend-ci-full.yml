@@ -16,6 +16,30 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: testpass
+          MYSQL_DATABASE: fusionxpay_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -36,10 +60,25 @@ jobs:
             ${{ runner.os }}-maven-
 
       - name: Run all unit tests
-        run: mvn test -B
+        run: mvn test -B -DskipITs
+        env:
+          SPRING_DATASOURCE_URL: jdbc:mysql://localhost:3306/fusionxpay_test
+          SPRING_DATASOURCE_USERNAME: root
+          SPRING_DATASOURCE_PASSWORD: testpass
+          SPRING_REDIS_HOST: localhost
+          SPRING_REDIS_PORT: 6379
+
+      - name: Install common module for integration tests
+        run: mvn install -B -DskipTests -pl common
 
       - name: Run all integration tests
         run: mvn failsafe:integration-test failsafe:verify -B
+        env:
+          SPRING_DATASOURCE_URL: jdbc:mysql://localhost:3306/fusionxpay_test
+          SPRING_DATASOURCE_USERNAME: root
+          SPRING_DATASOURCE_PASSWORD: testpass
+          SPRING_REDIS_HOST: localhost
+          SPRING_REDIS_PORT: 6379
 
       - name: Generate coverage report
         run: mvn jacoco:report -B
