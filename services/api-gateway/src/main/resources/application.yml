@@ -22,6 +22,31 @@ spring:
           enabled: true
           lower-case-service-id: true
       routes:
+        # Canonical v1 routes exposed via unified public API domain
+        - id: admin-v1
+          uri: lb://admin-service
+          predicates:
+            - Path=/api/v1/admin/**
+        - id: order-v1
+          uri: lb://order-service
+          predicates:
+            - Path=/api/v1/orders/**
+        - id: payment-v1
+          uri: lb://payment-service
+          predicates:
+            - Path=/api/v1/payment/**
+        - id: notification-v1
+          uri: lb://notification-service
+          predicates:
+            - Path=/api/v1/notifications/**
+
+        # Backward-compatible legacy routes
+        - id: admin-service-legacy
+          uri: lb://admin-service
+          predicates:
+            - Path=/admin-service/**
+          filters:
+            - RewritePath=/admin-service/(?<segment>.*), /api/v1/admin/${segment}
         - id: order-service
           uri: lb://order-service
           predicates:
@@ -50,20 +75,16 @@ eureka:
 
 logging:
   level:
-    com.fusionxpay.api.gateway: TRACE
-    com.fusionxpay: DEBUG
-    org.springframework.cloud.gateway: TRACE
-    org.springframework.http.server.reactive: DEBUG
-    org.springframework.web.reactive: DEBUG
-    org.springframework.web: TRACE
-    org.springframework.security: TRACE
-    reactor.netty: DEBUG
+    root: INFO
+    com.fusionxpay: INFO
+    com.fusionxpay.api.gateway: INFO
+    org.springframework.cloud.gateway: INFO
 
 management:
   endpoints:
     web:
       exposure:
-        include: configprops, env
+        include: health,info,prometheus,configprops,env
 
 springdoc:
   api-docs:
