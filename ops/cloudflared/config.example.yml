@@ -1,0 +1,7 @@
+tunnel: <TUNNEL_ID>
+credentials-file: /home/<ubuntu_user>/.cloudflared/<TUNNEL_ID>.json
+
+ingress:
+  - hostname: api.<your-domain>
+    service: http://localhost:8080
+  - service: http_status:404
