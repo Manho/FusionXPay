@@ -48,9 +48,9 @@ management:
 
 logging:
   level:
-    com.fusionxpay.admin: DEBUG
-    org.springframework.web: DEBUG
-    org.springframework.security: DEBUG
+    com.fusionxpay.admin: INFO
+    org.springframework.web: INFO
+    org.springframework.security: INFO
 
 # OpenAPI
 springdoc:
