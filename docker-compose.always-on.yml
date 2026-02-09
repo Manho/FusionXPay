@@ -1,0 +1,132 @@
+version: "3.8"
+
+x-common-env: &common-env
+  DB_HOST: ${DB_HOST:?DB_HOST is required}
+  DB_PORT: ${DB_PORT:-3306}
+  DB_NAME: ${DB_NAME:-fusionxpay_db}
+  DB_USERNAME: ${DB_USERNAME:?DB_USERNAME is required}
+  DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+  EUREKA_URL: ${EUREKA_URL:?EUREKA_URL is required}
+  KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:?KAFKA_BOOTSTRAP_SERVERS is required}
+  REDIS_HOST: ${REDIS_HOST:?REDIS_HOST is required}
+  REDIS_PORT: ${REDIS_PORT:-6379}
+  SPRING_JPA_SHOW_SQL: "false"
+  LOGGING_LEVEL_ROOT: ${LOGGING_LEVEL_ROOT:-INFO}
+  LOGGING_LEVEL_COM_FUSIONXPAY: ${LOGGING_LEVEL_COM_FUSIONXPAY:-INFO}
+  LOGGING_LEVEL_ORG_SPRINGFRAMEWORK: ${LOGGING_LEVEL_ORG_SPRINGFRAMEWORK:-INFO}
+
+x-common-service: &common-service
+  restart: unless-stopped
+  networks:
+    - fusionxpay-network
+
+services:
+  api-gateway:
+    <<: *common-service
+    build:
+      context: .
+      dockerfile: services/api-gateway/Dockerfile
+    container_name: fusionxpay-api-gateway
+    ports:
+      - "${API_GATEWAY_PORT:-8080}:8080"
+    mem_limit: 384m
+    cpus: 0.50
+    environment:
+      <<: *common-env
+      JAVA_TOOL_OPTIONS: >-
+        -XX:+UseContainerSupport
+        -XX:MaxRAMPercentage=70
+        -Xms128m
+        -Xmx256m
+      ORDER_SERVICE_URL: ${ORDER_SERVICE_URL:-http://order-service:8082}
+      PAYMENT_SERVICE_URL: ${PAYMENT_SERVICE_URL:-http://payment-service:8081}
+      NOTIFICATION_SERVICE_URL: ${NOTIFICATION_SERVICE_URL:-http://notification-service:8083}
+      ADMIN_SERVICE_URL: ${ADMIN_SERVICE_URL:-http://admin-service:8084}
+
+  payment-service:
+    <<: *common-service
+    build:
+      context: .
+      dockerfile: services/payment-service/Dockerfile
+    container_name: fusionxpay-payment-service
+    mem_limit: 960m
+    cpus: 0.90
+    healthcheck:
+      disable: true
+    environment:
+      <<: *common-env
+      JAVA_TOOL_OPTIONS: >-
+        -XX:+UseContainerSupport
+        -XX:MaxRAMPercentage=70
+        -Xms256m
+        -Xmx640m
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      PAYPAL_CLIENT_ID: ${PAYPAL_CLIENT_ID:-}
+      PAYPAL_CLIENT_SECRET: ${PAYPAL_CLIENT_SECRET:-}
+      PAYPAL_WEBHOOK_ID: ${PAYPAL_WEBHOOK_ID:-}
+      PAYPAL_MODE: ${PAYPAL_MODE:-sandbox}
+      PAYPAL_BASE_URL: ${PAYPAL_BASE_URL:-https://api-m.sandbox.paypal.com}
+      PAYPAL_RETURN_URL: ${PAYPAL_RETURN_URL:-http://localhost:8080/api/v1/payment/paypal/return}
+      PAYPAL_CANCEL_URL: ${PAYPAL_CANCEL_URL:-http://localhost:8080/api/v1/payment/paypal/cancel}
+      PAYMENT_FRONTEND_SUCCESS_URL: ${PAYMENT_FRONTEND_SUCCESS_URL:-http://localhost:3000/payment/success}
+      PAYMENT_FRONTEND_CANCEL_URL: ${PAYMENT_FRONTEND_CANCEL_URL:-http://localhost:3000/payment/cancel}
+      PAYMENT_FRONTEND_ERROR_URL: ${PAYMENT_FRONTEND_ERROR_URL:-http://localhost:3000/payment/error}
+
+  order-service:
+    <<: *common-service
+    build:
+      context: .
+      dockerfile: services/order-service/Dockerfile
+    container_name: fusionxpay-order-service
+    mem_limit: 768m
+    cpus: 0.80
+    environment:
+      <<: *common-env
+      JAVA_TOOL_OPTIONS: >-
+        -XX:+UseContainerSupport
+        -XX:MaxRAMPercentage=70
+        -Xms192m
+        -Xmx512m
+
+  notification-service:
+    <<: *common-service
+    build:
+      context: .
+      dockerfile: services/notification-service/Dockerfile
+    container_name: fusionxpay-notification-service
+    mem_limit: 384m
+    cpus: 0.50
+    healthcheck:
+      disable: true
+    environment:
+      <<: *common-env
+      JAVA_TOOL_OPTIONS: >-
+        -XX:+UseContainerSupport
+        -XX:MaxRAMPercentage=70
+        -Xms128m
+        -Xmx256m
+
+  admin-service:
+    <<: *common-service
+    build:
+      context: .
+      dockerfile: services/admin-service/Dockerfile
+    container_name: fusionxpay-admin-service
+    mem_limit: 512m
+    cpus: 0.60
+    healthcheck:
+      disable: true
+    environment:
+      <<: *common-env
+      JAVA_TOOL_OPTIONS: >-
+        -XX:+UseContainerSupport
+        -XX:MaxRAMPercentage=70
+        -Xms128m
+        -Xmx384m
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      ORDER_SERVICE_URL: ${ORDER_SERVICE_URL:-http://order-service:8082}
+
+networks:
+  fusionxpay-network:
+    driver: bridge

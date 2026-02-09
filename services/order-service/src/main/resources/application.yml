@@ -75,6 +75,6 @@ management:
 
 logging:
   level:
-    com.fusionxpay.order: DEBUG
-    org.springframework.web: DEBUG
-    org.hibernate: DEBUG
+    com.fusionxpay.order: INFO
+    org.springframework.web: INFO
+    org.hibernate: INFO

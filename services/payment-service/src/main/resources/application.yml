@@ -81,5 +81,5 @@ eureka:
 
 logging:
   level:
-    com.fusionxpay.payment.service: DEBUG
+    com.fusionxpay.payment.service: INFO
     org.springframework.kafka: INFO
