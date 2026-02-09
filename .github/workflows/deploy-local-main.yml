@@ -1,0 +1,89 @@
+name: Deploy Local (Main)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "services/**"
+      - "common/**"
+      - "docker-compose.always-on.yml"
+      - ".env.always-on.example"
+      - "scripts/deploy-always-on.sh"
+      - "scripts/check-always-on-health.sh"
+      - "scripts/deploy-local-main.sh"
+      - "scripts/mark-successful-sha.sh"
+      - "scripts/rollback-local-main.sh"
+      - ".github/workflows/deploy-local-main.yml"
+  push:
+    branches: [main]
+    paths:
+      - "services/**"
+      - "common/**"
+      - "docker-compose.always-on.yml"
+      - ".env.always-on.example"
+      - "scripts/deploy-always-on.sh"
+      - "scripts/check-always-on-health.sh"
+      - "scripts/deploy-local-main.sh"
+      - "scripts/mark-successful-sha.sh"
+      - "scripts/rollback-local-main.sh"
+      - ".github/workflows/deploy-local-main.yml"
+  workflow_dispatch:
+
+jobs:
+  validate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate deployment scripts
+        run: |
+          bash -n scripts/deploy-always-on.sh
+          bash -n scripts/check-always-on-health.sh
+          bash -n scripts/deploy-local-main.sh
+          bash -n scripts/mark-successful-sha.sh
+          bash -n scripts/rollback-local-main.sh
+
+      - name: Validate always-on compose profile
+        run: |
+          docker compose --env-file .env.always-on.example -f docker-compose.always-on.yml config >/dev/null
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    runs-on: [self-hosted, linux]
+    concurrency:
+      group: fusionxpay-main-deploy
+      cancel-in-progress: false
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify runtime env file exists
+        run: |
+          if [ ! -f .env.always-on ]; then
+            echo "::error title=Missing env file::.env.always-on not found on self-hosted runner"
+            exit 1
+          fi
+
+      - name: Deploy latest revision
+        env:
+          DEPLOY_ENV_FILE: ./.env.always-on
+        run: ./scripts/deploy-local-main.sh "${DEPLOY_ENV_FILE}"
+
+      - name: Smoke check deployment
+        env:
+          DEPLOY_ENV_FILE: ./.env.always-on
+        run: ./scripts/check-always-on-health.sh "${DEPLOY_ENV_FILE}"
+
+      - name: Mark deployment successful
+        if: success()
+        run: ./scripts/mark-successful-sha.sh
+
+      - name: Rollback to last successful revision
+        if: failure()
+        env:
+          DEPLOY_ENV_FILE: ./.env.always-on
+        run: ./scripts/rollback-local-main.sh "${DEPLOY_ENV_FILE}"
