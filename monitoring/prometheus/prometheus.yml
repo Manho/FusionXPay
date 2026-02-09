@@ -1,0 +1,34 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: fusionxpay-api-gateway
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - api-gateway:8080
+
+  - job_name: fusionxpay-payment-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - payment-service:8081
+
+  - job_name: fusionxpay-order-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - order-service:8082
+
+  - job_name: fusionxpay-notification-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - notification-service:8083
+
+  - job_name: fusionxpay-admin-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - admin-service:8084
