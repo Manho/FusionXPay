@@ -83,3 +83,12 @@ logging:
   level:
     com.fusionxpay.payment.service: INFO
     org.springframework.kafka: INFO
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: always

@@ -63,3 +63,5 @@ docker compose --env-file ./.env.always-on -f docker-compose.always-on.yml down
 
 - This profile intentionally keeps logging at INFO level for long-running low-resource operation.
 - If any service needs temporary diagnostics, raise log level briefly and revert to INFO.
+- Local monitoring and backup runbook:
+  - `docs/operations/local-observability-backup.md`
