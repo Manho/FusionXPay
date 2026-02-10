@@ -51,8 +51,6 @@ services:
     container_name: fusionxpay-payment-service
     mem_limit: 960m
     cpus: 0.90
-    healthcheck:
-      disable: true
     environment:
       <<: *common-env
       JAVA_TOOL_OPTIONS: >-
@@ -97,8 +95,6 @@ services:
     container_name: fusionxpay-notification-service
     mem_limit: 384m
     cpus: 0.50
-    healthcheck:
-      disable: true
     environment:
       <<: *common-env
       JAVA_TOOL_OPTIONS: >-
@@ -115,8 +111,6 @@ services:
     container_name: fusionxpay-admin-service
     mem_limit: 512m
     cpus: 0.60
-    healthcheck:
-      disable: true
     environment:
       <<: *common-env
       JAVA_TOOL_OPTIONS: >-
