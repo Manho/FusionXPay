@@ -16,6 +16,9 @@ echo "[INFO] Using env file: ${ENV_FILE}"
 
 docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" config >/dev/null
 
+echo "[INFO] Stopping existing containers..."
+docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" down --timeout 30 --remove-orphans
+
 echo "[INFO] Building and starting always-on services..."
 docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d --build --remove-orphans
 
