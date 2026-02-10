@@ -16,7 +16,16 @@ echo "[INFO] Using env file: ${ENV_FILE}"
 
 docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" config >/dev/null
 
-echo "[INFO] Stopping existing containers..."
+echo "[INFO] Removing stale containers (if any)..."
+for name in $(docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" config --services); do
+  cid=$(docker ps -aq -f "name=fusionxpay-${name}" 2>/dev/null || true)
+  if [[ -n "${cid}" ]]; then
+    echo "[INFO]   Removing stale container fusionxpay-${name} (${cid})"
+    docker rm -f "${cid}" || true
+  fi
+done
+
+echo "[INFO] Stopping existing project containers..."
 docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" down --timeout 30 --remove-orphans
 
 echo "[INFO] Building and starting always-on services..."
