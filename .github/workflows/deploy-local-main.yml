@@ -63,20 +63,16 @@ jobs:
 
       - name: Verify runtime env file exists
         run: |
-          if [ ! -f .env.always-on ]; then
-            echo "::error title=Missing env file::.env.always-on not found on self-hosted runner"
+          if [ ! -f "$HOME/.fusionxpay/.env.always-on" ]; then
+            echo "::error title=Missing env file::~/.fusionxpay/.env.always-on not found on self-hosted runner"
             exit 1
           fi
 
       - name: Deploy latest revision
-        env:
-          DEPLOY_ENV_FILE: ./.env.always-on
-        run: ./scripts/deploy-local-main.sh "${DEPLOY_ENV_FILE}"
+        run: ./scripts/deploy-local-main.sh "$HOME/.fusionxpay/.env.always-on"
 
       - name: Smoke check deployment
-        env:
-          DEPLOY_ENV_FILE: ./.env.always-on
-        run: ./scripts/check-always-on-health.sh "${DEPLOY_ENV_FILE}"
+        run: ./scripts/check-always-on-health.sh "$HOME/.fusionxpay/.env.always-on"
 
       - name: Mark deployment successful
         if: success()
@@ -84,6 +80,4 @@ jobs:
 
       - name: Rollback to last successful revision
         if: failure()
-        env:
-          DEPLOY_ENV_FILE: ./.env.always-on
-        run: ./scripts/rollback-local-main.sh "${DEPLOY_ENV_FILE}"
+        run: ./scripts/rollback-local-main.sh "$HOME/.fusionxpay/.env.always-on"
