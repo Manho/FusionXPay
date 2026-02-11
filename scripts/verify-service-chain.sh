@@ -194,15 +194,6 @@ if [[ -n "$API_KEY" ]]; then
     log_pass "Order created: $ORDER_ID"
 
     # Initiate payment (will likely fail since Stripe isn't configured, but tests the route)
-    PAYMENT_RESPONSE=$(curl -s --connect-timeout 5 --max-time 15 \
-      -X POST "${BASE_URL}/api/v1/payment/request" \
-      -H "X-API-Key: $API_KEY" \
-      -H "Content-Type: application/json" \
-      -d "{
-        \"orderId\": \"$ORDER_ID\",
-        \"paymentChannel\": \"STRIPE\"
-      }" 2>/dev/null || echo "{}")
-
     PAYMENT_CODE=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 --max-time 15 \
       -X POST "${BASE_URL}/api/v1/payment/request" \
       -H "X-API-Key: $API_KEY" \
