@@ -15,6 +15,10 @@ spring:
     hibernate:
       ddl-auto: update
     show-sql: true
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
   cloud:
     gateway:
       discovery:
@@ -23,6 +27,17 @@ spring:
           lower-case-service-id: true
       routes:
         # Canonical v1 routes exposed via unified public API domain
+        - id: admin-login-v1
+          uri: lb://admin-service
+          predicates:
+            - Path=/api/v1/admin/auth/login
+          filters:
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@ipKeyResolver}"
+                redis-rate-limiter.replenishRate: ${app.rate-limit.login.replenish-rate}
+                redis-rate-limiter.burstCapacity: ${app.rate-limit.login.burst-capacity}
+                redis-rate-limiter.requestedTokens: ${app.rate-limit.login.requested-tokens}
         - id: admin-v1
           uri: lb://admin-service
           predicates:
@@ -31,33 +46,65 @@ spring:
           uri: lb://order-service
           predicates:
             - Path=/api/v1/orders/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@apiKeyKeyResolver}"
+                redis-rate-limiter.replenishRate: ${app.rate-limit.orders.replenish-rate}
+                redis-rate-limiter.burstCapacity: ${app.rate-limit.orders.burst-capacity}
+                redis-rate-limiter.requestedTokens: ${app.rate-limit.orders.requested-tokens}
         - id: payment-v1
           uri: lb://payment-service
           predicates:
             - Path=/api/v1/payment/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@apiKeyKeyResolver}"
+                redis-rate-limiter.replenishRate: ${app.rate-limit.payment.replenish-rate}
+                redis-rate-limiter.burstCapacity: ${app.rate-limit.payment.burst-capacity}
+                redis-rate-limiter.requestedTokens: ${app.rate-limit.payment.requested-tokens}
         - id: notification-v1
           uri: lb://notification-service
           predicates:
             - Path=/api/v1/notifications/**
 
-        # Backward-compatible legacy routes
+        # Backward-compatible legacy routes (rate-limited to prevent bypass)
         - id: admin-service-legacy
           uri: lb://admin-service
           predicates:
             - Path=/admin-service/**
           filters:
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@ipKeyResolver}"
+                redis-rate-limiter.replenishRate: ${app.rate-limit.login.replenish-rate}
+                redis-rate-limiter.burstCapacity: ${app.rate-limit.login.burst-capacity}
+                redis-rate-limiter.requestedTokens: ${app.rate-limit.login.requested-tokens}
             - RewritePath=/admin-service/(?<segment>.*), /api/v1/admin/${segment}
         - id: order-service
           uri: lb://order-service
           predicates:
             - Path=/order-service/**
           filters:
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@apiKeyKeyResolver}"
+                redis-rate-limiter.replenishRate: ${app.rate-limit.orders.replenish-rate}
+                redis-rate-limiter.burstCapacity: ${app.rate-limit.orders.burst-capacity}
+                redis-rate-limiter.requestedTokens: ${app.rate-limit.orders.requested-tokens}
             - RewritePath=/order-service/(?<segment>.*), /api/v1/${segment}
         - id: payment-service
           uri: lb://payment-service
           predicates:
             - Path=/payment-service/**
           filters:
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@apiKeyKeyResolver}"
+                redis-rate-limiter.replenishRate: ${app.rate-limit.payment.replenish-rate}
+                redis-rate-limiter.burstCapacity: ${app.rate-limit.payment.burst-capacity}
+                redis-rate-limiter.requestedTokens: ${app.rate-limit.payment.requested-tokens}
             - RewritePath=/payment-service/(?<segment>.*), /api/v1/${segment}
         - id: notification-service
           uri: lb://notification-service
@@ -85,6 +132,21 @@ management:
     web:
       exposure:
         include: health,info,prometheus,configprops,env
+
+app:
+  rate-limit:
+    login:
+      replenish-rate: ${RATE_LIMIT_LOGIN_REPLENISH_RATE:1}
+      burst-capacity: ${RATE_LIMIT_LOGIN_BURST_CAPACITY:10}
+      requested-tokens: ${RATE_LIMIT_LOGIN_REQUESTED_TOKENS:1}
+    payment:
+      replenish-rate: ${RATE_LIMIT_PAYMENT_REPLENISH_RATE:1}
+      burst-capacity: ${RATE_LIMIT_PAYMENT_BURST_CAPACITY:20}
+      requested-tokens: ${RATE_LIMIT_PAYMENT_REQUESTED_TOKENS:1}
+    orders:
+      replenish-rate: ${RATE_LIMIT_ORDERS_REPLENISH_RATE:5}
+      burst-capacity: ${RATE_LIMIT_ORDERS_BURST_CAPACITY:100}
+      requested-tokens: ${RATE_LIMIT_ORDERS_REQUESTED_TOKENS:1}
 
 springdoc:
   api-docs:

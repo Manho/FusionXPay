@@ -51,6 +51,13 @@ class ApiKeyAuthFilterTest {
         apiKeyAuthFilter.filter(authExchange, chain).block();
         assertTrue(chain.wasCalled());
 
+        TrackingFilterChain adminAuthChain = new TrackingFilterChain();
+        ServerWebExchange adminAuthExchange = MockServerWebExchange.from(
+                MockServerHttpRequest.post("/api/v1/admin/auth/login").build());
+
+        apiKeyAuthFilter.filter(adminAuthExchange, adminAuthChain).block();
+        assertTrue(adminAuthChain.wasCalled());
+
         TrackingFilterChain swaggerChain = new TrackingFilterChain();
         ServerWebExchange swaggerExchange = MockServerWebExchange.from(
                 MockServerHttpRequest.get("/swagger-ui/index.html").build());
