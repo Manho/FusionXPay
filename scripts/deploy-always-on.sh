@@ -20,6 +20,13 @@ fi
 echo "[INFO] Using compose file: ${COMPOSE_FILE}"
 echo "[INFO] Using env file: ${ENV_FILE}"
 
+if ! grep -Eq '^[[:space:]]*CORS_ALLOWED_ORIGINS=' "${ENV_FILE}"; then
+  echo "[ERROR] Missing CORS_ALLOWED_ORIGINS in env file: ${ENV_FILE}"
+  echo "Set CORS_ALLOWED_ORIGINS to comma-separated allowed frontend origins before deploy."
+  exit 1
+fi
+echo "[INFO] CORS_ALLOWED_ORIGINS is configured in env file."
+
 docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" config >/dev/null
 
 echo "[INFO] Removing stale containers (if any)..."

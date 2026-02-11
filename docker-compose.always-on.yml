@@ -119,6 +119,7 @@ services:
         -Xms128m
         -Xmx384m
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?CORS_ALLOWED_ORIGINS is required}
       ORDER_SERVICE_URL: ${ORDER_SERVICE_URL:-http://order-service:8082}
 
 networks:
