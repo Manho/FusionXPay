@@ -252,13 +252,13 @@ And add security headers via filter or `spring.security.headers`:
 |------|--------|
 | **Tool** | OWASP dependency-check-maven plugin (v10.0.4) |
 | **Status** | Plugin added to root `pom.xml` |
-| **Command** | `mvn dependency-check:aggregate -DskipTests` |
+| **Command** | `mvn verify -Psecurity-scan -DskipTests` |
 | **Result** | **PENDING** — Requires network access to download NVD database |
 
-The OWASP Dependency Check plugin has been added to the project. Run the following command when the environment is available:
+The OWASP Dependency Check plugin has been added with a dedicated Maven profile `security-scan`, keeping normal builds fast. Run when the environment is available:
 
 ```bash
-mvn dependency-check:aggregate -DskipTests
+mvn verify -Psecurity-scan -DskipTests
 # Report generated at: target/dependency-check-report.html
 ```
 
