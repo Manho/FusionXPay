@@ -23,13 +23,23 @@ log_fail()  { echo -e "\033[31m[FAIL]\033[0m  $*"; FAIL=$((FAIL+1)); }
 log_warn()  { echo -e "\033[33m[WARN]\033[0m  $*"; WARN=$((WARN+1)); }
 log_section() { echo -e "\n\033[1m=== $* ===\033[0m"; }
 
+get_http_code() {
+  local code
+  code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 --max-time 10 "$@" 2>/dev/null) || true
+  # curl outputs "000" on connection failure; guard against unexpected output
+  if [[ ! "$code" =~ ^[0-9]{3}$ ]]; then
+    code="000"
+  fi
+  echo "$code"
+}
+
 check_http() {
   local description="$1"
   local expected_code="$2"
   local url="$3"
   shift 3
   local actual_code
-  actual_code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 --max-time 10 "$@" "$url" 2>/dev/null || echo "000")
+  actual_code=$(get_http_code "$@" "$url")
   if [[ "$actual_code" == "$expected_code" ]]; then
     log_pass "$description (HTTP $actual_code)"
   else
@@ -43,8 +53,10 @@ check_http_not() {
   local url="$3"
   shift 3
   local actual_code
-  actual_code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 --max-time 10 "$@" "$url" 2>/dev/null || echo "000")
-  if [[ "$actual_code" != "$unexpected_code" && "$actual_code" != "000" ]]; then
+  actual_code=$(get_http_code "$@" "$url")
+  if [[ "$actual_code" == "000" ]]; then
+    log_fail "$description — connection failed"
+  elif [[ "$actual_code" != "$unexpected_code" ]]; then
     log_pass "$description (HTTP $actual_code, not $unexpected_code)"
   else
     log_fail "$description — got $actual_code"
@@ -61,7 +73,7 @@ for svc in "Eureka:${EUREKA_URL}/eureka/apps" \
            "API Gateway:${BASE_URL}/actuator/health"; do
   name="${svc%%:*}"
   url="${svc#*:}"
-  code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 "$url" 2>/dev/null || echo "000")
+  code=$(get_http_code "$url")
   if [[ "$code" == "200" ]]; then
     log_pass "$name is reachable (HTTP $code)"
   else
@@ -195,7 +207,7 @@ if [[ -n "$API_KEY" ]]; then
     log_pass "Order created: $ORDER_ID"
 
     # Initiate payment (will likely fail since Stripe isn't configured, but tests the route)
-    PAYMENT_CODE=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 --max-time 15 \
+    PAYMENT_CODE=$(get_http_code \
       -X POST "${BASE_URL}/api/v1/payment/request" \
       -H "X-API-Key: $API_KEY" \
       -H "Content-Type: application/json" \
@@ -204,9 +216,11 @@ if [[ -n "$API_KEY" ]]; then
         \"amount\": 10.00,
         \"currency\": \"USD\",
         \"paymentChannel\": \"STRIPE\"
-      }" 2>/dev/null || echo "000")
+      }")
 
-    if [[ "$PAYMENT_CODE" != "502" && "$PAYMENT_CODE" != "000" ]]; then
+    if [[ "$PAYMENT_CODE" == "000" ]]; then
+      log_fail "Payment → Order chain — connection failed"
+    elif [[ "$PAYMENT_CODE" != "502" ]]; then
       log_pass "Payment → Order chain reachable (HTTP $PAYMENT_CODE)"
     else
       log_fail "Payment → Order chain unreachable (HTTP $PAYMENT_CODE)"
