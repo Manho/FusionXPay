@@ -106,12 +106,12 @@ check_http "Invalid API Key → 401" "401" "${BASE_URL}/api/v1/orders" \
 
 # 4.3 Register user and get API Key
 log_info "Registering test user to obtain API Key..."
+TIMESTAMP=$(date +%s)
 REGISTER_RESPONSE=$(curl -s --connect-timeout 5 --max-time 10 \
   -X POST "${BASE_URL}/api/v1/auth/register" \
   -H "Content-Type: application/json" \
   -d "{
-    \"businessName\": \"ChainTest-$(date +%s)\",
-    \"email\": \"chaintest-$(date +%s)@test.com\",
+    \"username\": \"chaintest-${TIMESTAMP}\",
     \"password\": \"TestPass123!\"
   }" 2>/dev/null || echo "{}")
 
@@ -120,7 +120,7 @@ API_KEY=$(echo "$REGISTER_RESPONSE" | grep -o '"apiKey":"[^"]*"' | head -1 | cut
 if [[ -n "$API_KEY" ]]; then
   log_pass "User registered, API Key obtained: ${API_KEY:0:8}..."
 else
-  log_warn "Could not register user — chain tests requiring API Key will be skipped"
+  log_fail "Could not register user — all chain tests requiring API Key will fail"
   API_KEY=""
 fi
 
@@ -160,7 +160,7 @@ if [[ -n "$API_KEY" ]]; then
   check_http_not "Gateway → Payment Service (/api/v1/payment)" "502" \
     "${BASE_URL}/api/v1/payment/request" \
     -X POST -H "X-API-Key: $API_KEY" -H "Content-Type: application/json" \
-    -d '{"orderId":"00000000-0000-0000-0000-000000000000","paymentChannel":"STRIPE"}'
+    -d '{"orderId":"00000000-0000-0000-0000-000000000000","amount":1.00,"currency":"USD","paymentChannel":"STRIPE"}'
 fi
 
 if [[ -n "$JWT_TOKEN" ]]; then
@@ -182,6 +182,7 @@ if [[ -n "$API_KEY" ]]; then
     -H "X-API-Key: $API_KEY" \
     -H "Content-Type: application/json" \
     -d "{
+      \"userId\": 1,
       \"amount\": 10.00,
       \"currency\": \"USD\",
       \"description\": \"Chain verification test order\"
@@ -200,6 +201,8 @@ if [[ -n "$API_KEY" ]]; then
       -H "Content-Type: application/json" \
       -d "{
         \"orderId\": \"$ORDER_ID\",
+        \"amount\": 10.00,
+        \"currency\": \"USD\",
         \"paymentChannel\": \"STRIPE\"
       }" 2>/dev/null || echo "000")
 
@@ -209,7 +212,7 @@ if [[ -n "$API_KEY" ]]; then
       log_fail "Payment → Order chain unreachable (HTTP $PAYMENT_CODE)"
     fi
   else
-    log_warn "Could not create order — skipping payment chain test"
+    log_fail "Could not create order — payment chain test cannot proceed"
   fi
 else
   log_warn "No API Key — skipping cross-service call tests"
