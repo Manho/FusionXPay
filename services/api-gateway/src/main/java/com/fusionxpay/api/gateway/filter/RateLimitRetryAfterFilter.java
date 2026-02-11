@@ -17,17 +17,19 @@ public class RateLimitRetryAfterFilter implements GlobalFilter, Ordered {
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
-        return chain.filter(exchange).then(Mono.fromRunnable(() -> {
-            ServerHttpResponse response = exchange.getResponse();
+        ServerHttpResponse response = exchange.getResponse();
+        response.beforeCommit(() -> {
             if (response.getStatusCode() == HttpStatus.TOO_MANY_REQUESTS
                     && !response.getHeaders().containsKey(HttpHeaders.RETRY_AFTER)) {
                 response.getHeaders().add(HttpHeaders.RETRY_AFTER, RETRY_AFTER_SECONDS);
             }
-        }));
+            return Mono.empty();
+        });
+        return chain.filter(exchange);
     }
 
     @Override
     public int getOrder() {
-        return Ordered.LOWEST_PRECEDENCE;
+        return Ordered.HIGHEST_PRECEDENCE;
     }
 }

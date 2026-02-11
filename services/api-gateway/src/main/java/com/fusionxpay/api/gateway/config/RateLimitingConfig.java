@@ -13,31 +13,26 @@ import java.net.InetSocketAddress;
 public class RateLimitingConfig {
 
     @Bean
+    @Primary
     public KeyResolver ipKeyResolver() {
         return exchange -> {
-            String forwardedFor = exchange.getRequest().getHeaders().getFirst("X-Forwarded-For");
-            if (StringUtils.hasText(forwardedFor)) {
-                return Mono.just(forwardedFor.split(",")[0].trim());
-            }
-
             InetSocketAddress remoteAddress = exchange.getRequest().getRemoteAddress();
             if (remoteAddress != null && remoteAddress.getAddress() != null) {
                 return Mono.just(remoteAddress.getAddress().getHostAddress());
             }
-
             return Mono.just("unknown-ip");
         };
     }
 
     @Bean
-    @Primary
     public KeyResolver apiKeyKeyResolver() {
         return exchange -> {
             String apiKey = exchange.getRequest().getHeaders().getFirst("X-API-Key");
             if (StringUtils.hasText(apiKey)) {
                 return Mono.just(apiKey);
             }
-            return Mono.just("missing-api-key");
+            // No API key → empty signals denial to the rate limiter
+            return Mono.empty();
         };
     }
 }

@@ -61,13 +61,13 @@ class RateLimitingIntegrationIT extends AbstractIntegrationTest {
     @Test
     @DisplayName("Admin login endpoint is rate limited by source IP")
     void adminLoginIsRateLimitedByIp() {
-        String clientIp = "203.0.113." + (10 + (int) (Math.random() * 100));
+        // ipKeyResolver now uses remoteAddress directly (X-Forwarded-For is not trusted)
+        // All requests from this test share the same loopback IP, so burst-capacity=2 applies
 
         for (int i = 0; i < 2; i++) {
             assertNotRateLimited(
                     webTestClient.post()
                             .uri("/api/v1/admin/auth/login")
-                            .header("X-Forwarded-For", clientIp)
                             .contentType(MediaType.APPLICATION_JSON)
                             .bodyValue(Map.of("username", "admin", "password", "admin123"))
                             .exchange()
@@ -79,7 +79,6 @@ class RateLimitingIntegrationIT extends AbstractIntegrationTest {
 
         webTestClient.post()
                 .uri("/api/v1/admin/auth/login")
-                .header("X-Forwarded-For", clientIp)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(Map.of("username", "admin", "password", "admin123"))
                 .exchange()
