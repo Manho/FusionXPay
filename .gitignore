@@ -9,7 +9,6 @@ target/
 *.lst
 *.dumpstream
 *.dump
-scripts
 
 # Java class files and packaging artifacts
 *.class

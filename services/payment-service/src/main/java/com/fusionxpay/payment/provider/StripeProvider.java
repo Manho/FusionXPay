@@ -297,7 +297,8 @@ public class StripeProvider implements PaymentProvider {
                         .status(PaymentStatus.SUCCESS)
                         .orderId(UUID.fromString(orderId))
                         .paymentChannel(getProviderName())
-                        .providerTransactionId(session.getId())
+                        // Store Stripe PaymentIntent ID so refunds can be issued later.
+                        .providerTransactionId(intent.getId())
                         .build();
             } catch (StripeException e) {
                 log.error("Error retrieving payment intent: {}", e.getMessage(), e);
@@ -375,8 +376,14 @@ public class StripeProvider implements PaymentProvider {
 
             // Determine the appropriate status
             PaymentStatus status = charge.getRefunded() != null && charge.getRefunded()
-                    ? PaymentStatus.SUCCESS  // Using SUCCESS to indicate refund completed
-                    : PaymentStatus.PROCESSING;  // Partial refund still processing
+                    ? PaymentStatus.REFUNDED
+                    : PaymentStatus.PROCESSING;
+
+            // Keep providerTransactionId pointing at the PaymentIntent so further refunds/queries keep working.
+            String providerTransactionId = charge.getPaymentIntent();
+            if (providerTransactionId == null || providerTransactionId.isBlank()) {
+                providerTransactionId = chargeId;
+            }
 
             log.info("Stripe refund processed. OrderId: {}, ChargeId: {}, Status: {}",
                     orderId, chargeId, refundStatus);
@@ -385,7 +392,7 @@ public class StripeProvider implements PaymentProvider {
                     .status(status)
                     .orderId(UUID.fromString(orderId))
                     .paymentChannel(getProviderName())
-                    .providerTransactionId(chargeId)
+                    .providerTransactionId(providerTransactionId)
                     .errorMessage("Refund " + refundStatus) // Use errorMessage to indicate refund status
                     .build();
 

@@ -168,11 +168,9 @@ if [[ -n "$API_KEY" ]]; then
   check_http_not "Gateway → Order Service (/api/v1/orders)" "502" \
     "${BASE_URL}/api/v1/orders" -H "X-API-Key: $API_KEY"
 
-  # Payment route
+  # Payment route: prefer a simple read-only endpoint so this check doesn't depend on provider secrets.
   check_http_not "Gateway → Payment Service (/api/v1/payment)" "502" \
-    "${BASE_URL}/api/v1/payment/request" \
-    -X POST -H "X-API-Key: $API_KEY" -H "Content-Type: application/json" \
-    -d '{"orderId":"00000000-0000-0000-0000-000000000000","amount":1.00,"currency":"USD","paymentChannel":"STRIPE"}'
+    "${BASE_URL}/api/v1/payment/providers" -H "X-API-Key: $API_KEY"
 fi
 
 if [[ -n "$JWT_TOKEN" ]]; then
