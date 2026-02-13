@@ -285,11 +285,13 @@ CONTAINERS="fusionxpay-api-gateway fusionxpay-order-service fusionxpay-payment-s
 
 for container in $CONTAINERS; do
   if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${container}$"; then
-    health=$(docker inspect --format='{{.State.Health.Status}}' "$container" 2>/dev/null || echo "unknown")
+    health=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' "$container" 2>/dev/null || echo "unknown")
     if [[ "$health" == "healthy" ]]; then
       log_pass "$container is healthy"
     elif [[ "$health" == "starting" ]]; then
       log_warn "$container is still starting"
+    elif [[ "$health" == "no-healthcheck" ]]; then
+      log_warn "$container has no Docker healthcheck configured"
     else
       log_fail "$container health: $health"
     fi

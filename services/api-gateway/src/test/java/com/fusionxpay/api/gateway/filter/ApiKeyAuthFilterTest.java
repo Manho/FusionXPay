@@ -64,6 +64,24 @@ class ApiKeyAuthFilterTest {
 
         apiKeyAuthFilter.filter(swaggerExchange, swaggerChain).block();
         assertTrue(swaggerChain.wasCalled());
+
+        TrackingFilterChain adminProtectedChain = new TrackingFilterChain();
+        ServerWebExchange adminProtectedExchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/api/v1/admin/orders").build());
+
+        apiKeyAuthFilter.filter(adminProtectedExchange, adminProtectedChain).block();
+        assertTrue(adminProtectedChain.wasCalled());
+    }
+
+    @Test
+    @DisplayName("OPTIONS requests bypass API key validation")
+    void optionsRequestsAllowed() {
+        TrackingFilterChain chain = new TrackingFilterChain();
+        ServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.options("/api/v1/admin/auth/login").build());
+
+        apiKeyAuthFilter.filter(exchange, chain).block();
+        assertTrue(chain.wasCalled());
     }
 
     @Test

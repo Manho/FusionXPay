@@ -1,0 +1,66 @@
+groups:
+  - name: fusionxpay-service-health
+    rules:
+      - alert: ServiceDown
+        expr: up{job=~"fusionxpay-.*"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service is down"
+          description: "{{ $labels.job }} has been down for more than 1 minute."
+
+      - alert: HighErrorRate
+        expr: |
+          (
+            sum(rate(http_server_requests_seconds_count{job=~"fusionxpay-.*",status=~"5.."}[5m]))
+            /
+            sum(rate(http_server_requests_seconds_count{job=~"fusionxpay-.*"}[5m]))
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High HTTP 5xx error rate"
+          description: "FusionXPay HTTP 5xx ratio is above 5% for 5 minutes."
+
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(http_server_requests_seconds_bucket{job=~"fusionxpay-.*"}[5m])) by (le, job)
+          ) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High p95 latency"
+          description: "{{ $labels.job }} p95 latency is above 2 seconds for 5 minutes."
+
+      - alert: JVMHeapHigh
+        expr: |
+          (
+            sum by (job) (jvm_memory_used_bytes{job=~"fusionxpay-.*",area="heap"})
+            /
+            sum by (job) (jvm_memory_max_bytes{job=~"fusionxpay-.*",area="heap"})
+          ) > 0.85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "JVM heap usage is high"
+          description: "{{ $labels.job }} heap usage has been above 85% for 10 minutes."
+
+      - alert: HikariPoolExhaustion
+        expr: |
+          (
+            max by (job) (hikaricp_connections_active{job=~"fusionxpay-.*"})
+            /
+            max by (job) (hikaricp_connections_max{job=~"fusionxpay-.*"})
+          ) >= 1
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HikariCP pool exhaustion"
+          description: "{{ $labels.job }} has active connections equal to max pool size for over 2 minutes."
