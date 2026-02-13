@@ -3,10 +3,12 @@ package com.fusionxpay.payment.service;
 import com.fusionxpay.common.model.PaymentStatus;
 import com.fusionxpay.payment.dto.PaymentRequest;
 import com.fusionxpay.payment.dto.PaymentResponse;
+import com.fusionxpay.payment.dto.PaymentConfirmRequest;
 import com.fusionxpay.payment.event.OrderEventProducer;
 import com.fusionxpay.payment.model.PaymentTransaction;
 import com.fusionxpay.payment.provider.PaymentProvider;
 import com.fusionxpay.payment.provider.PaymentProviderFactory;
+import com.fusionxpay.payment.provider.StripeProvider;
 import com.fusionxpay.payment.repository.PaymentTransactionRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -213,5 +215,44 @@ public class PaymentServiceUnitTest {
         verify(paymentTransactionRepository).save(argThat(tx ->
                 "pi_test_final".equals(tx.getProviderTransactionId())
         ));
+    }
+
+    @Test
+    void testConfirmPayment_StripeSuccessUpdatesTransaction() {
+        // Given
+        PaymentTransaction existing = new PaymentTransaction();
+        existing.setTransactionId(UUID.randomUUID());
+        existing.setOrderId(orderId);
+        existing.setAmount(new BigDecimal("100.00"));
+        existing.setCurrency("USD");
+        existing.setPaymentChannel("STRIPE");
+        existing.setStatus(PaymentStatus.PROCESSING.name());
+        existing.setProviderTransactionId("cs_test_123");
+
+        StripeProvider stripeProvider = mock(StripeProvider.class);
+        when(paymentTransactionRepository.findByOrderId(orderId)).thenReturn(Optional.of(existing));
+        when(paymentProviderFactory.getProvider("STRIPE")).thenReturn(stripeProvider);
+
+        when(stripeProvider.confirmProviderReference("cs_test_123", orderId)).thenReturn(PaymentResponse.builder()
+                .status(PaymentStatus.SUCCESS)
+                .orderId(orderId)
+                .paymentChannel("STRIPE")
+                .providerTransactionId("pi_test_456")
+                .build());
+
+        // When
+        PaymentResponse response = paymentService.confirmPayment(PaymentConfirmRequest.builder()
+                .orderId(orderId)
+                .paymentChannel("STRIPE")
+                .build());
+
+        // Then
+        assertEquals(PaymentStatus.SUCCESS, response.getStatus());
+        assertEquals("pi_test_456", response.getProviderTransactionId());
+        verify(paymentTransactionRepository).save(argThat(tx ->
+                PaymentStatus.SUCCESS.name().equals(tx.getStatus())
+                        && "pi_test_456".equals(tx.getProviderTransactionId())
+        ));
+        verify(orderEventProducer).sendPaymentStatusUpdate(eq(orderId), any(UUID.class), eq(PaymentStatus.SUCCESS));
     }
 }

@@ -529,4 +529,154 @@ public class StripeProvider implements PaymentProvider {
             return false;
         }
     }
+
+    /**
+     * Confirms a Checkout Session by querying Stripe API directly.
+     * This is a fallback for environments where inbound webhooks are unavailable.
+     *
+     * Note: Production setups should rely on webhooks for correctness.
+     */
+    public PaymentResponse confirmCheckoutSession(String sessionId, UUID orderId) {
+        if (sessionId == null || sessionId.isBlank()) {
+            return PaymentResponse.builder()
+                    .status(PaymentStatus.FAILED)
+                    .orderId(orderId)
+                    .paymentChannel(getProviderName())
+                    .errorMessage("Missing Stripe session ID")
+                    .build();
+        }
+
+        try {
+            Session session = Session.retrieve(sessionId);
+            String paymentStatus = session.getPaymentStatus();
+            String paymentIntentId = session.getPaymentIntent();
+
+            if ("paid".equalsIgnoreCase(paymentStatus) && paymentIntentId != null && !paymentIntentId.isBlank()) {
+                return PaymentResponse.builder()
+                        .status(PaymentStatus.SUCCESS)
+                        .orderId(orderId)
+                        .paymentChannel(getProviderName())
+                        .providerTransactionId(paymentIntentId)
+                        .build();
+            }
+
+            return PaymentResponse.builder()
+                    .status(PaymentStatus.PROCESSING)
+                    .orderId(orderId)
+                    .paymentChannel(getProviderName())
+                    .providerTransactionId(paymentIntentId)
+                    .errorMessage("Stripe session not paid yet: " + paymentStatus)
+                    .build();
+        } catch (StripeException e) {
+            log.error("Error confirming Stripe checkout session {}: {}", sessionId, e.getMessage(), e);
+            return PaymentResponse.builder()
+                    .status(PaymentStatus.FAILED)
+                    .orderId(orderId)
+                    .paymentChannel(getProviderName())
+                    .errorMessage("Stripe session confirm failed: " + e.getMessage())
+                    .build();
+        }
+    }
+
+    /**
+     * Confirms a provider reference by querying Stripe API directly.
+     * This is a fallback for environments where inbound webhooks are unavailable.
+     *
+     * Production setups should rely on webhooks for correctness.
+     */
+    public PaymentResponse confirmProviderReference(String referenceId, UUID orderId) {
+        if (referenceId == null || referenceId.isBlank()) {
+            return PaymentResponse.builder()
+                    .status(PaymentStatus.FAILED)
+                    .orderId(orderId)
+                    .paymentChannel(getProviderName())
+                    .errorMessage("Missing Stripe reference id")
+                    .build();
+        }
+
+        try {
+            // Checkout session id -> retrieve session -> if paid, map to PaymentIntent id for refunds.
+            if (referenceId.startsWith("cs_")) {
+                Session session = Session.retrieve(referenceId);
+                String paymentStatus = session.getPaymentStatus();
+                String paymentIntentId = session.getPaymentIntent();
+
+                if ("paid".equalsIgnoreCase(paymentStatus)) {
+                    if (paymentIntentId == null || paymentIntentId.isBlank()) {
+                        return PaymentResponse.builder()
+                                .status(PaymentStatus.SUCCESS)
+                                .orderId(orderId)
+                                .paymentChannel(getProviderName())
+                                .providerTransactionId(referenceId)
+                                .errorMessage("Stripe session is paid but missing payment_intent")
+                                .build();
+                    }
+                    return PaymentResponse.builder()
+                            .status(PaymentStatus.SUCCESS)
+                            .orderId(orderId)
+                            .paymentChannel(getProviderName())
+                            .providerTransactionId(paymentIntentId)
+                            .build();
+                }
+
+                return PaymentResponse.builder()
+                        .status(PaymentStatus.PROCESSING)
+                        .orderId(orderId)
+                        .paymentChannel(getProviderName())
+                        .providerTransactionId(paymentIntentId != null ? paymentIntentId : referenceId)
+                        .errorMessage("Stripe session not paid yet: " + paymentStatus)
+                        .build();
+            }
+
+            // PaymentIntent id -> retrieve intent -> if succeeded, mark success.
+            if (referenceId.startsWith("pi_")) {
+                PaymentIntent intent = PaymentIntent.retrieve(referenceId);
+                String status = intent.getStatus();
+
+                if ("succeeded".equalsIgnoreCase(status)) {
+                    return PaymentResponse.builder()
+                            .status(PaymentStatus.SUCCESS)
+                            .orderId(orderId)
+                            .paymentChannel(getProviderName())
+                            .providerTransactionId(referenceId)
+                            .build();
+                }
+
+                if ("canceled".equalsIgnoreCase(status) || "requires_payment_method".equalsIgnoreCase(status)) {
+                    return PaymentResponse.builder()
+                            .status(PaymentStatus.FAILED)
+                            .orderId(orderId)
+                            .paymentChannel(getProviderName())
+                            .providerTransactionId(referenceId)
+                            .errorMessage("Stripe PaymentIntent not successful: " + status)
+                            .build();
+                }
+
+                return PaymentResponse.builder()
+                        .status(PaymentStatus.PROCESSING)
+                        .orderId(orderId)
+                        .paymentChannel(getProviderName())
+                        .providerTransactionId(referenceId)
+                        .errorMessage("Stripe PaymentIntent not settled yet: " + status)
+                        .build();
+            }
+
+            return PaymentResponse.builder()
+                    .status(PaymentStatus.FAILED)
+                    .orderId(orderId)
+                    .paymentChannel(getProviderName())
+                    .providerTransactionId(referenceId)
+                    .errorMessage("Unsupported Stripe reference id: " + referenceId)
+                    .build();
+        } catch (StripeException e) {
+            log.error("Error confirming Stripe reference {}: {}", referenceId, e.getMessage(), e);
+            return PaymentResponse.builder()
+                    .status(PaymentStatus.FAILED)
+                    .orderId(orderId)
+                    .paymentChannel(getProviderName())
+                    .providerTransactionId(referenceId)
+                    .errorMessage("Stripe confirm failed: " + e.getMessage())
+                    .build();
+        }
+    }
 }
