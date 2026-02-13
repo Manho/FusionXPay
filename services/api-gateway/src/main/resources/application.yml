@@ -72,6 +72,19 @@ spring:
                 redis-rate-limiter.replenishRate: ${app.rate-limit.orders.replenish-rate}
                 redis-rate-limiter.burstCapacity: ${app.rate-limit.orders.burst-capacity}
                 redis-rate-limiter.requestedTokens: ${app.rate-limit.orders.requested-tokens}
+        # Payment provider callbacks/webhooks do not have our API key header.
+        # Route them explicitly before the general payment route and rate-limit by IP instead.
+        - id: payment-callbacks-v1
+          uri: lb://payment-service
+          predicates:
+            - Path=/api/v1/payment/webhook/**,/api/v1/payment/paypal/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@ipKeyResolver}"
+                redis-rate-limiter.replenishRate: ${app.rate-limit.payment.replenish-rate}
+                redis-rate-limiter.burstCapacity: ${app.rate-limit.payment.burst-capacity}
+                redis-rate-limiter.requestedTokens: ${app.rate-limit.payment.requested-tokens}
         - id: payment-v1
           uri: lb://payment-service
           predicates:
