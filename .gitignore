@@ -35,6 +35,9 @@ Thumbs.db
 config.json
 .env
 
+# k6 outputs (keep scripts public, keep runtime results private)
+tests/performance/results/
+
 # Docker-specific files (if any temporary overrides)
 docker-compose.override.yml
 docker-compose.*.yml

@@ -6,12 +6,14 @@ import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.fusionxpay.order.constant.ApiResponseCodes;
@@ -40,6 +42,7 @@ import lombok.extern.slf4j.Slf4j;
 public class OrderController {
 
     private final OrderService orderService;
+    private static final String HEADER_MERCHANT_ID = "X-Merchant-Id";
 
     /**
      * Get paginated list of orders with optional filters
@@ -50,7 +53,8 @@ public class OrderController {
         @ApiResponse(responseCode = ApiResponseCodes.OK, description = "Orders retrieved successfully"),
         @ApiResponse(responseCode = ApiResponseCodes.INTERNAL_SERVER_ERROR, description = "Internal server error")
     })
-    public ResponseEntity<OrderPageResponse> getOrders(
+    public ResponseEntity<?> getOrders(
+            @RequestHeader(value = HEADER_MERCHANT_ID, required = false) Long merchantIdHeader,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) String status,
@@ -58,6 +62,16 @@ public class OrderController {
             @RequestParam(required = false) String orderNumber) {
         log.info("Received get orders request - page: {}, size: {}, status: {}, merchantId: {}",
                 page, size, status, merchantId);
+
+        if (merchantIdHeader != null) {
+            if (merchantId == null) {
+                merchantId = merchantIdHeader;
+            } else if (!merchantIdHeader.equals(merchantId)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(new ErrorResponse("Forbidden: merchantId mismatch"));
+            }
+        }
 
         OrderPageResponse response = orderService.getOrders(page, size, status, merchantId, orderNumber);
         return ResponseEntity.ok(response);
@@ -70,7 +84,20 @@ public class OrderController {
         @ApiResponse(responseCode = ApiResponseCodes.BAD_REQUEST, description = "Invalid request parameters"),
         @ApiResponse(responseCode = ApiResponseCodes.INTERNAL_SERVER_ERROR, description = "Internal server error")
     })
-    public ResponseEntity<OrderResponse> createOrder(@Valid @RequestBody OrderRequest request) {
+    public ResponseEntity<?> createOrder(
+            @RequestHeader(value = HEADER_MERCHANT_ID, required = false) Long merchantIdHeader,
+            @Valid @RequestBody OrderRequest request
+    ) {
+        if (merchantIdHeader != null) {
+            // Enforce that the order belongs to the authenticated merchant.
+            request.setUserId(merchantIdHeader);
+        }
+        if (request.getUserId() == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(new ErrorResponse("User ID is required (missing merchant identity header)"));
+        }
+
         log.info("Received create order request for userId: {}", request.getUserId());
         
         OrderResponse response = orderService.createOrder(request);
@@ -85,11 +112,19 @@ public class OrderController {
                     content = @Content(schema = @Schema(implementation = ErrorResponseSchema.class))),
         @ApiResponse(responseCode = ApiResponseCodes.INTERNAL_SERVER_ERROR, description = "Internal server error")
     })
-    public ResponseEntity<?> getOrderByNumber(@PathVariable String orderNumber) {
+    public ResponseEntity<?> getOrderByNumber(
+            @RequestHeader(value = HEADER_MERCHANT_ID, required = false) Long merchantIdHeader,
+            @PathVariable String orderNumber
+    ) {
         log.info("Received get order request for number: {}", orderNumber);
         
         try {
             OrderResponse response = orderService.getOrderByNumber(orderNumber);
+            if (!isOwner(response, merchantIdHeader)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(new ErrorResponse("Forbidden: order does not belong to merchant"));
+            }
             return ResponseEntity.ok(response);
         } catch (OrderNotFoundException ex) {
             log.warn("Order not found with number: {}", orderNumber);
@@ -111,11 +146,19 @@ public class OrderController {
                     content = @Content(schema = @Schema(implementation = ErrorResponseSchema.class))),
         @ApiResponse(responseCode = ApiResponseCodes.INTERNAL_SERVER_ERROR, description = "Internal server error")
     })
-    public ResponseEntity<?> getOrderById(@PathVariable UUID orderId) {
+    public ResponseEntity<?> getOrderById(
+            @RequestHeader(value = HEADER_MERCHANT_ID, required = false) Long merchantIdHeader,
+            @PathVariable UUID orderId
+    ) {
         log.info("Received get order request for ID: {}", orderId);
         
         try {
             OrderResponse response = orderService.getOrderById(orderId);
+            if (!isOwner(response, merchantIdHeader)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(new ErrorResponse("Forbidden: order does not belong to merchant"));
+            }
             return ResponseEntity.ok(response);
         } catch (OrderNotFoundException ex) {
             log.warn("Order not found with ID: {}", orderId);
@@ -144,5 +187,21 @@ public class OrderController {
         @Schema(description = "Error message", example = "Order not found with number: ORD-12345678")
         private String message;
         
+    }
+
+    @Data
+    private static class ErrorResponse {
+        private final String message;
+    }
+
+    private boolean isOwner(OrderResponse response, Long merchantIdHeader) {
+        if (merchantIdHeader == null) {
+            // No merchant context means internal call: allow.
+            return true;
+        }
+        if (response == null || response.getUserId() == null) {
+            return false;
+        }
+        return merchantIdHeader.equals(response.getUserId());
     }
 }

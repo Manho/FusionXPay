@@ -1,0 +1,258 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Kafka Consumer Throughput",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "fusionxpay-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "sum by (job) (rate(kafka_consumer_fetch_manager_records_consumed_total{job=~\"$service\"}[5m]))",
+          "legendFormat": "{{job}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Kafka Consumer Lag",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "fusionxpay-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "max by (job, topic) (kafka_consumer_records_lag_max{job=~\"$service\"})",
+          "legendFormat": "{{job}} {{topic}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "HikariCP Connections (Active / Pending / Max)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "fusionxpay-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "targets": [
+        {
+          "expr": "max by (job, pool) (hikaricp_connections_active{job=~\"$service\"})",
+          "legendFormat": "{{job}} {{pool}} active",
+          "refId": "A"
+        },
+        {
+          "expr": "max by (job, pool) (hikaricp_connections_pending{job=~\"$service\"})",
+          "legendFormat": "{{job}} {{pool}} pending",
+          "refId": "B"
+        },
+        {
+          "expr": "max by (job, pool) (hikaricp_connections_max{job=~\"$service\"})",
+          "legendFormat": "{{job}} {{pool}} max",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "HikariCP Acquire Time (avg)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "fusionxpay-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "targets": [
+        {
+          "expr": "sum by (job, pool) (rate(hikaricp_connections_acquire_seconds_sum{job=~\"$service\"}[5m])) / clamp_min(sum by (job, pool) (rate(hikaricp_connections_acquire_seconds_count{job=~\"$service\"}[5m])), 1)",
+          "legendFormat": "{{job}} {{pool}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 4
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 5,
+      "type": "table",
+      "title": "Resilience4j Circuit Breaker State",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "fusionxpay-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 16
+      },
+      "targets": [
+        {
+          "expr": "max by (job, name, state) (resilience4j_circuitbreaker_state{job=~\"$service\"})",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "text": "inactive"
+                },
+                "1": {
+                  "text": "active"
+                }
+              },
+              "type": "value"
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true
+      }
+    }
+  ],
+  "refresh": "15s",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": [
+    "fusionxpay",
+    "infra",
+    "kafka",
+    "hikari"
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "service",
+        "label": "Service",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "fusionxpay-prometheus"
+        },
+        "definition": "label_values(up{job=~\"fusionxpay-.*\"}, job)",
+        "query": {
+          "query": "label_values(up{job=~\"fusionxpay-.*\"}, job)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "includeAll": true,
+        "allValue": ".*",
+        "refresh": 1,
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": ".*"
+        }
+      }
+    ]
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "title": "FusionXPay Infrastructure",
+  "uid": "fusionxpay-infrastructure",
+  "version": 1
+}

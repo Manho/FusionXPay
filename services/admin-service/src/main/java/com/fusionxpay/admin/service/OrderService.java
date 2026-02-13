@@ -39,7 +39,7 @@ public class OrderService {
 
         try {
             UriComponentsBuilder builder = UriComponentsBuilder
-                    .fromHttpUrl(orderServiceUrl + "/api/orders")
+                    .fromHttpUrl(orderServiceUrl + "/api/v1/orders")
                     .queryParam("page", params.getPage())
                     .queryParam("size", params.getSize());
 
@@ -96,7 +96,8 @@ public class OrderService {
         log.info("Fetching order by ID: {} - isAdmin: {}, merchantId: {}", orderId, isAdmin, merchantId);
 
         try {
-            String url = orderServiceUrl + "/api/orders/id/" + orderId;
+            // Align with order-service v1 routes.
+            String url = orderServiceUrl + "/api/v1/orders/id/" + orderId;
 
             ResponseEntity<OrderResponse> response = restTemplate.exchange(
                     url,
