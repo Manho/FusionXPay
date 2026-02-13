@@ -13,6 +13,7 @@ services:
       - --storage.tsdb.retention.time=14d
     volumes:
       - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
       - fusionxpay-prometheus-data:/prometheus
     networks:
       - fusionxpay-network
@@ -22,6 +23,34 @@ services:
       - order-service
       - notification-service
       - admin-service
+
+  loki:
+    image: grafana/loki:2.9.10
+    container_name: fusionxpay-loki
+    restart: unless-stopped
+    ports:
+      - "${LOKI_PORT:-3100}:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ./monitoring/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - fusionxpay-loki-data:/loki
+    networks:
+      - fusionxpay-network
+
+  promtail:
+    image: grafana/promtail:3.0.0
+    container_name: fusionxpay-promtail
+    restart: unless-stopped
+    command: -config.file=/etc/promtail/promtail-config.yml
+    volumes:
+      - ./monitoring/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - fusionxpay-promtail-data:/tmp
+    networks:
+      - fusionxpay-network
+    depends_on:
+      - loki
 
   grafana:
     image: grafana/grafana:11.2.2
@@ -41,7 +70,10 @@ services:
       - fusionxpay-network
     depends_on:
       - prometheus
+      - loki
 
 volumes:
   fusionxpay-prometheus-data:
   fusionxpay-grafana-data:
+  fusionxpay-loki-data:
+  fusionxpay-promtail-data:

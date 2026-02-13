@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
@@ -24,15 +25,19 @@ public class ApiKeyAuthFilter implements GlobalFilter, Ordered {
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, org.springframework.cloud.gateway.filter.GatewayFilterChain chain) {
         String path = exchange.getRequest().getURI().getPath();
-        String method = exchange.getRequest().getMethod().toString();
+        HttpMethod httpMethod = exchange.getRequest().getMethod();
+        String method = httpMethod != null ? httpMethod.name() : "UNKNOWN";
         log.info("Processing {} request to path: {}", method, path);
         
         exchange.getRequest().getHeaders().forEach((name, values) -> {
             values.forEach(value -> log.info("Header: {} = {}", name, value));
         });
 
-        if (path.startsWith("/api/v1/auth/") ||
-            path.startsWith("/api/v1/admin/auth/") ||
+        // Bypass API key validation for public/admin endpoints (admin routes use JWT, not API key),
+        // and allow CORS preflight to pass through.
+        if (HttpMethod.OPTIONS.equals(httpMethod) ||
+            path.startsWith("/api/v1/auth/") ||
+            path.startsWith("/api/v1/admin/") ||
             path.startsWith("/swagger-ui/") ||
             path.startsWith("/v3/api-docs") ||
             path.startsWith("/swagger-resources") ||
@@ -64,7 +69,15 @@ public class ApiKeyAuthFilter implements GlobalFilter, Ordered {
                         exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
                         return exchange.getResponse().setComplete();
                     }
-                    return chain.filter(exchange);
+                    // Propagate merchant identity downstream so services can enforce basic RBAC.
+                    // This is intentionally a simple header-based mechanism suitable for a demo setup.
+                    User user = userOpt.get();
+                    ServerWebExchange mutatedExchange = exchange.mutate()
+                            .request(exchange.getRequest().mutate()
+                                    .header("X-Merchant-Id", String.valueOf(user.getId()))
+                                    .build())
+                            .build();
+                    return chain.filter(mutatedExchange);
                 });
     }
 

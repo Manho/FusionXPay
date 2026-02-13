@@ -25,6 +25,25 @@ spring:
         locator:
           enabled: true
           lower-case-service-id: true
+      globalcors:
+        add-to-simple-url-handler-mapping: true
+        cors-configurations:
+          '[/**]':
+            allowedOriginPatterns:
+              - "http://localhost:3000"
+              - "http://localhost:3001"
+              - "https://*.vercel.app"
+              - "https://*.trycloudflare.com"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders:
+              - "*"
+            allowCredentials: true
+            maxAge: 3600
       routes:
         # Canonical v1 routes exposed via unified public API domain
         - id: admin-login-v1

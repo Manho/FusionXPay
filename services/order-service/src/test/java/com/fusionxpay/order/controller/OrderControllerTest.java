@@ -1,7 +1,6 @@
 package com.fusionxpay.order.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fusionxpay.order.config.TestConfig;
 import com.fusionxpay.order.dto.OrderRequest;
 import com.fusionxpay.order.dto.OrderResponse;
 import com.fusionxpay.order.repository.OrderRepository;
@@ -12,7 +11,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -26,7 +24,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc
-@Import(TestConfig.class)
 class OrderControllerTest {
 
     @Autowired
@@ -92,7 +89,7 @@ class OrderControllerTest {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status").value(404))
                 .andExpect(jsonPath("$.error").value("Not Found"))
-                .andExpect(jsonPath("$.message").value("Order not found with ID: " + orderId));
+                .andExpect(jsonPath("$.message").value("Order not found with orderId: " + orderId));
     }
 
     @Test
