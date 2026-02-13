@@ -136,4 +136,22 @@ class OrderControllerTest {
                 .content(objectMapper.writeValueAsString(invalidRequest)))
                 .andExpect(status().isBadRequest());
     }
+
+    @Test
+    @DisplayName("Get order by ID returns 403 when merchant tries to access another merchant's order")
+    void getOrderById_Forbidden_WhenMerchantMismatch() throws Exception {
+        OrderResponse createdOrder = orderService.createOrder(OrderRequest.builder()
+                .userId(1L)
+                .amount(new BigDecimal("20.00"))
+                .currency("USD")
+                .build());
+
+        mockMvc.perform(get("/api/v1/orders/id/" + createdOrder.getOrderId())
+                .header("X-Merchant-Id", "2")
+                .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status").value(403))
+                .andExpect(jsonPath("$.error").value("Forbidden"))
+                .andExpect(jsonPath("$.message").value("Forbidden: order does not belong to merchant"));
+    }
 }
