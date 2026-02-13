@@ -33,11 +33,14 @@ public class ApiKeyAuthFilter implements GlobalFilter, Ordered {
             values.forEach(value -> log.info("Header: {} = {}", name, value));
         });
 
-        // Bypass API key validation for public/admin endpoints (admin routes use JWT, not API key),
-        // and allow CORS preflight to pass through.
+        // Bypass API key validation for endpoints that are called by browsers or external providers
+        // (admin routes use JWT, not API key), and allow CORS preflight to pass through.
         if (HttpMethod.OPTIONS.equals(httpMethod) ||
             path.startsWith("/api/v1/auth/") ||
             path.startsWith("/api/v1/admin/") ||
+            // Payment provider callbacks/webhooks cannot include our API key header.
+            path.startsWith("/api/v1/payment/webhook/") ||
+            path.startsWith("/api/v1/payment/paypal/") ||
             path.startsWith("/swagger-ui/") ||
             path.startsWith("/v3/api-docs") ||
             path.startsWith("/swagger-resources") ||
