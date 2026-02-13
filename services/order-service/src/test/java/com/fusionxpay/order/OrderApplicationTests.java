@@ -1,7 +1,6 @@
 package com.fusionxpay.order;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fusionxpay.order.config.TestConfig;
 import com.fusionxpay.order.controller.OrderController;
 import com.fusionxpay.order.dto.OrderRequest;
 import com.fusionxpay.order.dto.OrderResponse;
@@ -14,7 +13,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -29,7 +27,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc
-@Import(TestConfig.class)
 @Transactional
 class OrderApplicationTests {
 
