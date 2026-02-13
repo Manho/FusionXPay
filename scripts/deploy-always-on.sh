@@ -29,6 +29,36 @@ echo "[INFO] CORS_ALLOWED_ORIGINS is configured in env file."
 
 docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" config >/dev/null
 
+# --- Eureka cleanup: deregister stale instances before redeployment ---
+EUREKA_URL=$(grep -oP '(?<=EUREKA_URL=).*' "${ENV_FILE}" | head -1)
+if [[ -n "${EUREKA_URL}" ]]; then
+  EUREKA_BASE="${EUREKA_URL%/eureka}/eureka"
+  echo "[INFO] Cleaning stale Eureka registrations..."
+  SERVICES=("API-GATEWAY" "PAYMENT-SERVICE" "ORDER-SERVICE" "NOTIFICATION-SERVICE" "ADMIN-SERVICE")
+  for svc in "${SERVICES[@]}"; do
+    # Fetch all instance IDs for this service
+    instance_ids=$(curl -sf -H "Accept: application/json" "${EUREKA_BASE}/apps/${svc}" 2>/dev/null \
+      | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    instances = data.get('application', {}).get('instance', [])
+    if isinstance(instances, dict): instances = [instances]
+    for inst in instances:
+        print(inst.get('instanceId', ''))
+except: pass
+" 2>/dev/null || true)
+
+    for iid in ${instance_ids}; do
+      if [[ -n "${iid}" ]]; then
+        curl -sf -X DELETE "${EUREKA_BASE}/apps/${svc}/${iid}" >/dev/null 2>&1 && \
+          echo "[INFO]   Deregistered ${svc}/${iid}" || true
+      fi
+    done
+  done
+  echo "[INFO] Eureka cleanup complete. Services will re-register with correct hostnames on startup."
+fi
+
 echo "[INFO] Removing stale containers (if any)..."
 for name in $(docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" config --services); do
   cid=$(docker ps -aq -f "name=fusionxpay-${name}" 2>/dev/null || true)

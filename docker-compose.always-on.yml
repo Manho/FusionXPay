@@ -7,6 +7,7 @@ x-common-env: &common-env
   DB_USERNAME: ${DB_USERNAME:?DB_USERNAME is required}
   DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
   EUREKA_URL: ${EUREKA_URL:?EUREKA_URL is required}
+  EUREKA_INSTANCE_PREFER_IP_ADDRESS: "false"
   KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:?KAFKA_BOOTSTRAP_SERVERS is required}
   REDIS_HOST: ${REDIS_HOST:?REDIS_HOST is required}
   REDIS_PORT: ${REDIS_PORT:-6379}
@@ -27,12 +28,15 @@ services:
       context: .
       dockerfile: services/api-gateway/Dockerfile
     container_name: fusionxpay-api-gateway
+    hostname: api-gateway
     ports:
       - "${API_GATEWAY_PORT:-8080}:8080"
     mem_limit: 384m
     cpus: 0.50
+    stop_grace_period: 20s
     environment:
       <<: *common-env
+      EUREKA_INSTANCE_HOSTNAME: api-gateway
       JAVA_TOOL_OPTIONS: >-
         -XX:+UseContainerSupport
         -XX:MaxRAMPercentage=70
@@ -49,10 +53,13 @@ services:
       context: .
       dockerfile: services/payment-service/Dockerfile
     container_name: fusionxpay-payment-service
+    hostname: payment-service
     mem_limit: 960m
     cpus: 0.90
+    stop_grace_period: 20s
     environment:
       <<: *common-env
+      EUREKA_INSTANCE_HOSTNAME: payment-service
       JAVA_TOOL_OPTIONS: >-
         -XX:+UseContainerSupport
         -XX:MaxRAMPercentage=70
@@ -77,10 +84,13 @@ services:
       context: .
       dockerfile: services/order-service/Dockerfile
     container_name: fusionxpay-order-service
+    hostname: order-service
     mem_limit: 768m
     cpus: 0.80
+    stop_grace_period: 20s
     environment:
       <<: *common-env
+      EUREKA_INSTANCE_HOSTNAME: order-service
       JAVA_TOOL_OPTIONS: >-
         -XX:+UseContainerSupport
         -XX:MaxRAMPercentage=70
@@ -93,10 +103,13 @@ services:
       context: .
       dockerfile: services/notification-service/Dockerfile
     container_name: fusionxpay-notification-service
+    hostname: notification-service
     mem_limit: 512m
     cpus: 0.50
+    stop_grace_period: 20s
     environment:
       <<: *common-env
+      EUREKA_INSTANCE_HOSTNAME: notification-service
       JAVA_TOOL_OPTIONS: >-
         -XX:+UseContainerSupport
         -XX:MaxRAMPercentage=70
@@ -109,10 +122,13 @@ services:
       context: .
       dockerfile: services/admin-service/Dockerfile
     container_name: fusionxpay-admin-service
+    hostname: admin-service
     mem_limit: 512m
     cpus: 0.60
+    stop_grace_period: 20s
     environment:
       <<: *common-env
+      EUREKA_INSTANCE_HOSTNAME: admin-service
       JAVA_TOOL_OPTIONS: >-
         -XX:+UseContainerSupport
         -XX:MaxRAMPercentage=70
