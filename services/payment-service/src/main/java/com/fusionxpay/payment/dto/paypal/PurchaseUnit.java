@@ -50,4 +50,9 @@ public class PurchaseUnit {
      */
     @JsonProperty("soft_descriptor")
     private String softDescriptor;
+
+    /**
+     * Payments information returned by capture/get order responses.
+     */
+    private Payments payments;
 }

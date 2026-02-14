@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fusionxpay.payment.dto.paypal.PayPalOrderResponse;
 import com.fusionxpay.payment.dto.paypal.PayPalWebhookHeaders;
 import com.fusionxpay.payment.provider.PayPalProvider;
+import com.fusionxpay.payment.service.IdempotencyService;
 import com.fusionxpay.payment.service.PaymentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -13,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.view.RedirectView;
 
+import java.time.Duration;
 import java.util.UUID;
 
 /**
@@ -30,6 +32,7 @@ public class PayPalCallbackController {
 
     private final PayPalProvider payPalProvider;
     private final PaymentService paymentService;
+    private final IdempotencyService idempotencyService;
 
     @Value("${payment.frontend.success-url:http://localhost:3000/payment/success}")
     private String frontendSuccessUrl;
@@ -67,11 +70,54 @@ public class PayPalCallbackController {
                 return new RedirectView(frontendErrorUrl + "?error=missing_token");
             }
 
+            // Idempotency: PayPal/browser may trigger return multiple times (refresh/retry).
+            // We must ensure we don't repeatedly call capture and produce 422 in PayPal logs.
+            String captureKey = "paypal:return:capture:" + paypalOrderId;
+            String existingState = idempotencyService.getProcessingState(captureKey);
+            if (existingState != null) {
+                log.warn("Skipping PayPal capture for {} due to idempotency state={}", paypalOrderId, existingState);
+                return new RedirectView(frontendSuccessUrl +
+                        "?orderId=" + orderId +
+                        "&paypalOrderId=" + paypalOrderId);
+            }
+
+            boolean lockAcquired = idempotencyService.acquireProcessingLock(captureKey, Duration.ofMinutes(5));
+            if (!lockAcquired) {
+                log.warn("Skipping PayPal capture for {} because lock not acquired", paypalOrderId);
+                return new RedirectView(frontendSuccessUrl +
+                        "?orderId=" + orderId +
+                        "&paypalOrderId=" + paypalOrderId);
+            }
+
+            // Avoid duplicate capture calls (browser refresh / retries). If we already stored a capture ID
+            // (providerTransactionId changed from PayPal order ID -> capture ID), skip capture.
+            if (orderId != null && !orderId.isBlank()) {
+                try {
+                    UUID orderUuid = UUID.fromString(orderId);
+                    var txOpt = paymentService.findTransactionByOrderId(orderUuid);
+                    if (txOpt.isPresent()) {
+                        String st = txOpt.get().getStatus();
+                        String providerTx = txOpt.get().getProviderTransactionId();
+                        if (com.fusionxpay.common.model.PaymentStatus.SUCCESS.name().equals(st)
+                                || com.fusionxpay.common.model.PaymentStatus.REFUNDED.name().equals(st)
+                                || (providerTx != null && !providerTx.isBlank() && !providerTx.equals(paypalOrderId))) {
+                            log.warn("Skipping PayPal capture for order {} (status={}, providerTx={})", orderId, st, providerTx);
+                            return new RedirectView(frontendSuccessUrl +
+                                    "?orderId=" + orderId +
+                                    "&paypalOrderId=" + paypalOrderId);
+                        }
+                    }
+                } catch (Exception ignored) {
+                    // Ignore parse/lookup errors and proceed with capture.
+                }
+            }
+
             // Capture the payment
             PayPalOrderResponse captureResponse = payPalProvider.captureOrder(paypalOrderId);
 
             if (captureResponse == null) {
                 log.error("Failed to capture PayPal order: {}", paypalOrderId);
+                idempotencyService.releaseLock(captureKey);
                 return new RedirectView(frontendErrorUrl + "?error=capture_failed&orderId=" + orderId);
             }
 
@@ -80,24 +126,43 @@ public class PayPalCallbackController {
                     orderId, paypalOrderId, status);
 
             if ("COMPLETED".equals(status)) {
-                // Update internal order status
+                // Persist capture ID for refunds. Payment SUCCESS is confirmed by PayPal webhook
+                // (PAYMENT.CAPTURE.COMPLETED) rather than this browser return redirect.
                 if (orderId != null && !orderId.isEmpty()) {
                     try {
-                        paymentService.updatePaymentStatus(
-                                UUID.fromString(orderId),
-                                com.fusionxpay.common.model.PaymentStatus.SUCCESS
-                        );
+                        // Persist capture id for refunds when available.
+                        String captureId = null;
+                        try {
+                            if (captureResponse.getPurchaseUnits() != null && !captureResponse.getPurchaseUnits().isEmpty()
+                                    && captureResponse.getPurchaseUnits().get(0).getPayments() != null
+                                    && captureResponse.getPurchaseUnits().get(0).getPayments().getCaptures() != null
+                                    && !captureResponse.getPurchaseUnits().get(0).getPayments().getCaptures().isEmpty()) {
+                                captureId = captureResponse.getPurchaseUnits().get(0).getPayments().getCaptures().get(0).getId();
+                            }
+                        } catch (Exception ignored) {
+                            captureId = null;
+                        }
+
+                        UUID orderUuid = UUID.fromString(orderId);
+                        if (captureId != null && !captureId.isBlank()) {
+                            paymentService.updateProviderTransactionId(orderUuid, captureId);
+                            log.info("Stored PayPal captureId for orderId={}", orderId);
+                        } else {
+                            log.warn("PayPal captureId missing in capture response for orderId={}", orderId);
+                        }
                     } catch (Exception e) {
                         log.error("Failed to update payment status for order {}: {}",
                                 orderId, e.getMessage(), e);
                     }
                 }
 
+                idempotencyService.markAsCompleted(captureKey, Duration.ofDays(7));
                 return new RedirectView(frontendSuccessUrl +
                         "?orderId=" + orderId +
                         "&paypalOrderId=" + paypalOrderId);
             } else {
                 log.warn("PayPal order not completed. Status: {}", status);
+                idempotencyService.releaseLock(captureKey);
                 return new RedirectView(frontendErrorUrl +
                         "?error=payment_incomplete&status=" + status +
                         "&orderId=" + orderId);
@@ -173,24 +238,16 @@ public class PayPalCallbackController {
             ObjectMapper objectMapper = new ObjectMapper();
             String headersJson = objectMapper.writeValueAsString(headers);
 
-            var response = payPalProvider.processCallback(payload, headersJson);
-
-            if (response == null) {
-                // Unhandled event type, acknowledge anyway
-                return ResponseEntity.ok("Event received but not processed");
+            boolean processed = paymentService.handleCallback(payload, headersJson, "PAYPAL");
+            if (processed) {
+                return ResponseEntity.ok("Webhook processed successfully");
             }
-
-            if (response.getStatus() == com.fusionxpay.common.model.PaymentStatus.DUPLICATE) {
-                return ResponseEntity.ok("Duplicate event ignored");
-            }
-
-            return ResponseEntity.ok("Webhook processed successfully");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Webhook rejected");
 
         } catch (Exception e) {
             log.error("Error processing PayPal webhook: {}", e.getMessage(), e);
-            // Return 200 to prevent PayPal from retrying
-            // Log the error for investigation
-            return ResponseEntity.ok("Webhook received with errors");
+            // Return 400 so PayPal retries; we should not silently drop provider notifications.
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Webhook processing error");
         }
     }
 

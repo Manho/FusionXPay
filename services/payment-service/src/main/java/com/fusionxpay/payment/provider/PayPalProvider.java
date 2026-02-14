@@ -14,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
@@ -268,9 +269,58 @@ public class PayPalProvider implements PaymentProvider {
 
             return response;
 
+        } catch (HttpStatusCodeException e) {
+            // PayPal returns 422 ORDER_ALREADY_CAPTURED when the return URL is hit multiple times
+            // (browser refresh, duplicate redirects, retries). Treat it as idempotent by fetching
+            // the order and continuing if it is already COMPLETED.
+            String body = e.getResponseBodyAsString();
+            if (e.getStatusCode() == HttpStatus.UNPROCESSABLE_ENTITY
+                    && body != null
+                    && body.contains("ORDER_ALREADY_CAPTURED")) {
+                log.warn("PayPal order {} already captured (422). Fetching order details.", paypalOrderId);
+                PayPalOrderResponse existing = getOrder(paypalOrderId);
+                if (existing != null) {
+                    log.info("Fetched PayPal order {}. Status: {}", paypalOrderId, existing.getStatus());
+                    return existing;
+                }
+            }
+
+            log.error("Error capturing PayPal order {}. Status: {}, Body: {}",
+                    paypalOrderId, e.getStatusCode(), body);
+            throw new RuntimeException("Failed to capture PayPal order: " + e.getMessage(), e);
         } catch (Exception e) {
             log.error("Error capturing PayPal order {}: {}", paypalOrderId, e.getMessage(), e);
             throw new RuntimeException("Failed to capture PayPal order: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Gets a PayPal order by ID.
+     *
+     * @param paypalOrderId the PayPal order ID
+     * @return order details
+     */
+    public PayPalOrderResponse getOrder(String paypalOrderId) {
+        try {
+            String accessToken = payPalAuthService.getAccessToken();
+            String baseUrl = payPalAuthService.getBaseUrl();
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setBearerAuth(accessToken);
+
+            HttpEntity<Void> request = new HttpEntity<>(headers);
+
+            ResponseEntity<PayPalOrderResponse> responseEntity = restTemplate.exchange(
+                    baseUrl + "/v2/checkout/orders/" + paypalOrderId,
+                    HttpMethod.GET,
+                    request,
+                    PayPalOrderResponse.class
+            );
+
+            return responseEntity.getBody();
+        } catch (Exception e) {
+            log.error("Error fetching PayPal order {}: {}", paypalOrderId, e.getMessage(), e);
+            return null;
         }
     }
 
@@ -420,24 +470,14 @@ public class PayPalProvider implements PaymentProvider {
 
             log.info("PayPal order approved. PayPalOrderId: {}, OrderId: {}", paypalOrderId, customId);
 
-            // Auto-capture the order
-            PayPalOrderResponse captureResponse = captureOrder(paypalOrderId);
-
-            if (captureResponse != null && "COMPLETED".equals(captureResponse.getStatus())) {
-                return PaymentResponse.builder()
-                        .status(PaymentStatus.SUCCESS)
-                        .providerTransactionId(paypalOrderId)
-                        .orderId(parseUUID(customId))
-                        .paymentChannel(getProviderName())
-                        .build();
-            } else {
-                return PaymentResponse.builder()
-                        .status(PaymentStatus.PROCESSING)
-                        .providerTransactionId(paypalOrderId)
-                        .orderId(parseUUID(customId))
-                        .paymentChannel(getProviderName())
-                        .build();
-            }
+            // Do not capture here. Capture happens in the return callback or another explicit flow.
+            // Calling capture on ORDER.APPROVED risks duplicate capture (422 ORDER_ALREADY_CAPTURED).
+            return PaymentResponse.builder()
+                    .status(PaymentStatus.PROCESSING)
+                    .providerTransactionId(paypalOrderId)
+                    .orderId(parseUUID(customId))
+                    .paymentChannel(getProviderName())
+                    .build();
 
         } catch (Exception e) {
             log.error("Error processing order approved: {}", e.getMessage(), e);
@@ -477,17 +517,52 @@ public class PayPalProvider implements PaymentProvider {
         try {
             JsonNode resource = data.path("resource");
             String refundId = resource.path("id").asText();
-            String captureId = resource.path("links")
-                    .path(0)
-                    .path("href").asText();
+            String captureId = null;
+            // Prefer structured IDs when present.
+            String directCaptureId = resource.path("capture_id").asText();
+            if (directCaptureId != null && !directCaptureId.isBlank()) {
+                captureId = directCaptureId;
+            } else {
+                String relatedCaptureId = resource.path("supplementary_data")
+                        .path("related_ids")
+                        .path("capture_id").asText();
+                if (relatedCaptureId != null && !relatedCaptureId.isBlank()) {
+                    captureId = relatedCaptureId;
+                }
+            }
+            JsonNode links = resource.path("links");
+            if ((captureId == null || captureId.isBlank()) && links.isArray()) {
+                for (JsonNode link : links) {
+                    String href = link.path("href").asText();
+                    int idx = href.indexOf("/v2/payments/captures/");
+                    if (idx >= 0) {
+                        captureId = href.substring(idx + "/v2/payments/captures/".length());
+                        int slash = captureId.indexOf('/');
+                        if (slash > 0) {
+                            captureId = captureId.substring(0, slash);
+                        }
+                        break;
+                    }
+                    idx = href.indexOf("/captures/");
+                    if (idx >= 0) {
+                        captureId = href.substring(idx + "/captures/".length());
+                        int slash = captureId.indexOf('/');
+                        if (slash > 0) {
+                            captureId = captureId.substring(0, slash);
+                        }
+                        break;
+                    }
+                }
+            }
 
-            log.info("PayPal refund completed. RefundId: {}", refundId);
+            log.info("PayPal refund completed. RefundId: {}, CaptureId: {}", refundId, captureId);
 
+            // Use captureId as providerTransactionId so we can locate the original transaction and mark it REFUNDED.
             return PaymentResponse.builder()
-                    .status(PaymentStatus.SUCCESS)
-                    .providerTransactionId(refundId)
+                    .status(PaymentStatus.REFUNDED)
+                    .providerTransactionId(captureId)
                     .paymentChannel(getProviderName())
-                    .errorMessage("Refund completed")
+                    .errorMessage("Refund completed: " + refundId)
                     .build();
 
         } catch (Exception e) {
@@ -514,5 +589,20 @@ public class PayPalProvider implements PaymentProvider {
                 .paymentChannel(getProviderName())
                 .errorMessage(errorMessage)
                 .build();
+    }
+
+    private String extractFirstCaptureId(PayPalOrderResponse orderResponse) {
+        try {
+            if (orderResponse.getPurchaseUnits() == null || orderResponse.getPurchaseUnits().isEmpty()) {
+                return null;
+            }
+            var payments = orderResponse.getPurchaseUnits().get(0).getPayments();
+            if (payments == null || payments.getCaptures() == null || payments.getCaptures().isEmpty()) {
+                return null;
+            }
+            return payments.getCaptures().get(0).getId();
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 }

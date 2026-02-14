@@ -181,4 +181,37 @@ public class PaymentServiceUnitTest {
         verifyNoInteractions(paymentProvider);
         verifyNoMoreInteractions(paymentTransactionRepository);
     }
+
+    @Test
+    void testHandleCallback_UpdatesProviderTransactionId() {
+        // Given
+        PaymentTransaction existing = new PaymentTransaction();
+        existing.setTransactionId(UUID.randomUUID());
+        existing.setOrderId(orderId);
+        existing.setAmount(new BigDecimal("100.00"));
+        existing.setCurrency("USD");
+        existing.setPaymentChannel("STRIPE");
+        existing.setStatus(PaymentStatus.PROCESSING.name());
+        existing.setProviderTransactionId("cs_test_initial");
+
+        when(paymentProviderFactory.getProvider("STRIPE")).thenReturn(paymentProvider);
+        when(paymentProvider.validateCallback(anyString(), anyString())).thenReturn(true);
+        when(paymentProvider.processCallback(anyString(), anyString())).thenReturn(PaymentResponse.builder()
+                .orderId(orderId)
+                .status(PaymentStatus.SUCCESS)
+                .paymentChannel("STRIPE")
+                .providerTransactionId("pi_test_final")
+                .build());
+
+        when(paymentTransactionRepository.findByOrderId(orderId)).thenReturn(Optional.of(existing));
+
+        // When
+        boolean processed = paymentService.handleCallback("{}", "sig", "STRIPE");
+
+        // Then
+        assertTrue(processed);
+        verify(paymentTransactionRepository).save(argThat(tx ->
+                "pi_test_final".equals(tx.getProviderTransactionId())
+        ));
+    }
 }

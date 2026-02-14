@@ -31,6 +31,11 @@ public class PaymentService {
     private final PaymentProviderFactory paymentProviderFactory;
     private final OrderEventProducer orderEventProducer;
 
+    @Transactional(readOnly = true)
+    public Optional<PaymentTransaction> findTransactionByOrderId(UUID orderId) {
+        return paymentTransactionRepository.findByOrderId(orderId);
+    }
+
     /**
      * Initiates a payment transaction
      * 
@@ -161,20 +166,30 @@ public class PaymentService {
             }
 
             if (response.getOrderId() == null) {
-                log.error("Invalid callback response from provider: {}, missing Order ID", provider);
-                return false;
+                log.warn("Callback response from provider {} missing Order ID. Will try to resolve by providerTransactionId.", provider);
             }
             
             // Find and update transaction record
-            Optional<PaymentTransaction> optionalTransaction = 
-                paymentTransactionRepository.findByOrderId(response.getOrderId());
+            Optional<PaymentTransaction> optionalTransaction = Optional.empty();
+            if (response.getOrderId() != null) {
+                optionalTransaction = paymentTransactionRepository.findByOrderId(response.getOrderId());
+            }
+            if (optionalTransaction.isEmpty()
+                    && response.getProviderTransactionId() != null
+                    && !response.getProviderTransactionId().isBlank()) {
+                optionalTransaction = paymentTransactionRepository.findByProviderTransactionId(response.getProviderTransactionId());
+            }
             
             if (optionalTransaction.isEmpty()) {
-                log.error("Transaction not found: {}", response.getOrderId());
+                log.error("Transaction not found for provider {} (orderId={}, providerTransactionId={})",
+                        provider, response.getOrderId(), response.getProviderTransactionId());
                 return false;
             }
 
             PaymentTransaction transaction = optionalTransaction.get();
+            if (response.getOrderId() == null) {
+                response.setOrderId(transaction.getOrderId());
+            }
             
             // Log status change
             log.info("Updating transaction {} status: {} -> {}", 
@@ -182,6 +197,9 @@ public class PaymentService {
                 
             // Update transaction status
             transaction.setStatus(response.getStatus().name());
+            if (response.getProviderTransactionId() != null && !response.getProviderTransactionId().isBlank()) {
+                transaction.setProviderTransactionId(response.getProviderTransactionId());
+            }
             paymentTransactionRepository.save(transaction);
 
             // Notify order service about the status update
@@ -280,13 +298,25 @@ public class PaymentService {
      * @return PaymentResponse DTO
      */
     private PaymentResponse mapTransactionToResponse(PaymentTransaction transaction, String redirectUrl, String errorMessage) {
+        PaymentStatus parsedStatus;
+        try {
+            parsedStatus = PaymentStatus.valueOf(transaction.getStatus());
+        } catch (IllegalArgumentException ex) {
+            parsedStatus = PaymentStatus.FAILED;
+            if (errorMessage == null || errorMessage.isBlank()) {
+                errorMessage = "Unknown payment status: " + transaction.getStatus();
+            } else {
+                errorMessage = errorMessage + " (unknown payment status: " + transaction.getStatus() + ")";
+            }
+        }
+
         return PaymentResponse.builder()
                 .transactionId(transaction.getTransactionId())
                 .orderId(transaction.getOrderId())
                 .amount(transaction.getAmount())
                 .currency(transaction.getCurrency())
                 .paymentChannel(transaction.getPaymentChannel())
-                .status(PaymentStatus.valueOf(transaction.getStatus()))
+                .status(parsedStatus)
                 .redirectUrl(redirectUrl)
                 .errorMessage(errorMessage)
                 .providerTransactionId(transaction.getProviderTransactionId())
@@ -331,6 +361,29 @@ public class PaymentService {
                 status
         );
 
+        return true;
+    }
+
+    /**
+     * Updates the stored provider transaction ID for an order. This is required for refunds,
+     * because providers often return a placeholder identifier during checkout (e.g. checkout session/order ID),
+     * and a different identifier after capture/confirmation (e.g. PaymentIntent/capture ID).
+     */
+    @Transactional
+    public boolean updateProviderTransactionId(UUID orderId, String providerTransactionId) {
+        if (providerTransactionId == null || providerTransactionId.isBlank()) {
+            return false;
+        }
+
+        Optional<PaymentTransaction> optionalTransaction = paymentTransactionRepository.findByOrderId(orderId);
+        if (optionalTransaction.isEmpty()) {
+            log.warn("Transaction not found for order {} while updating providerTransactionId", orderId);
+            return false;
+        }
+
+        PaymentTransaction transaction = optionalTransaction.get();
+        transaction.setProviderTransactionId(providerTransactionId);
+        paymentTransactionRepository.save(transaction);
         return true;
     }
 
@@ -433,12 +486,9 @@ public class PaymentService {
                         .build();
             }
 
-            // Update transaction status if refund was successful
-            if (refundResponse.getStatus() == RefundStatus.COMPLETED) {
-                transaction.setStatus("REFUNDED");
-                paymentTransactionRepository.save(transaction);
-                log.info("Transaction {} marked as REFUNDED", transactionId);
-            }
+            // Do not mark the transaction as REFUNDED here.
+            // For both Stripe and PayPal we rely on provider webhooks to confirm refund completion
+            // and update the transaction status asynchronously.
 
             // Set transaction ID in response
             refundResponse.setTransactionId(transactionId.toString());
