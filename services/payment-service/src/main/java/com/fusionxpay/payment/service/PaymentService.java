@@ -2,7 +2,6 @@ package com.fusionxpay.payment.service;
 
 import com.fusionxpay.payment.dto.PaymentRequest;
 import com.fusionxpay.payment.dto.PaymentResponse;
-import com.fusionxpay.payment.dto.PaymentConfirmRequest;
 import com.fusionxpay.payment.dto.RefundRequest;
 import com.fusionxpay.payment.dto.RefundResponse;
 import com.fusionxpay.payment.event.OrderEventProducer;
@@ -258,108 +257,6 @@ public class PaymentService {
      */
     public List<String> getAvailablePaymentProviders() {
         return List.of("STRIPE", "PAYPAL");
-    }
-
-    /**
-     * Confirms the current payment state by querying provider APIs directly.
-     * This is a fallback for environments where inbound webhooks/callbacks are unavailable.
-     */
-    @Transactional
-    public PaymentResponse confirmPayment(PaymentConfirmRequest request) {
-        UUID orderId = request.getOrderId();
-        Optional<PaymentTransaction> optionalTransaction = paymentTransactionRepository.findByOrderId(orderId);
-        if (optionalTransaction.isEmpty()) {
-            return PaymentResponse.builder()
-                    .orderId(orderId)
-                    .status(PaymentStatus.NOT_FOUND)
-                    .errorMessage("Payment transaction not found for this order")
-                    .build();
-        }
-
-        PaymentTransaction transaction = optionalTransaction.get();
-
-        // If already terminal, return as-is.
-        if (PaymentStatus.SUCCESS.name().equals(transaction.getStatus())
-                || PaymentStatus.REFUNDED.name().equals(transaction.getStatus())
-                || PaymentStatus.FAILED.name().equals(transaction.getStatus())) {
-            return mapTransactionToResponse(transaction, null, null);
-        }
-
-        String channel = request.getPaymentChannel();
-        if (channel == null || channel.isBlank()) {
-            channel = transaction.getPaymentChannel();
-        }
-        if (channel == null || channel.isBlank()) {
-            return PaymentResponse.builder()
-                    .orderId(orderId)
-                    .status(PaymentStatus.FAILED)
-                    .errorMessage("Missing payment channel")
-                    .build();
-        }
-
-        String providerRef = request.getProviderReferenceId();
-        if (providerRef == null || providerRef.isBlank()) {
-            providerRef = transaction.getProviderTransactionId();
-        }
-        if (providerRef == null || providerRef.isBlank()) {
-            return PaymentResponse.builder()
-                    .orderId(orderId)
-                    .status(PaymentStatus.FAILED)
-                    .paymentChannel(channel)
-                    .errorMessage("Missing provider reference id")
-                    .build();
-        }
-
-        PaymentResponse providerResponse;
-        try {
-            if ("STRIPE".equalsIgnoreCase(channel)) {
-                StripeProvider stripeProvider = (StripeProvider) paymentProviderFactory.getProvider("STRIPE");
-                providerResponse = stripeProvider.confirmProviderReference(providerRef, orderId);
-            } else if ("PAYPAL".equalsIgnoreCase(channel)) {
-                PayPalProvider payPalProvider = (PayPalProvider) paymentProviderFactory.getProvider("PAYPAL");
-                providerResponse = payPalProvider.confirmProviderReference(providerRef, orderId);
-            } else {
-                return PaymentResponse.builder()
-                        .orderId(orderId)
-                        .status(PaymentStatus.FAILED)
-                        .paymentChannel(channel)
-                        .errorMessage("Unsupported payment channel: " + channel)
-                        .build();
-            }
-        } catch (Exception e) {
-            log.error("Error confirming provider reference for order {}: {}", orderId, e.getMessage(), e);
-            return PaymentResponse.builder()
-                    .orderId(orderId)
-                    .status(PaymentStatus.FAILED)
-                    .paymentChannel(channel)
-                    .errorMessage("Confirm failed: " + e.getMessage())
-                    .build();
-        }
-
-        if (providerResponse == null) {
-            return mapTransactionToResponse(transaction, null, "Provider did not return a confirmation result");
-        }
-
-        // Only persist when we have a definitive result (SUCCESS/FAILED). PROCESSING stays unchanged.
-        if (PaymentStatus.SUCCESS.equals(providerResponse.getStatus()) || PaymentStatus.FAILED.equals(providerResponse.getStatus())) {
-            String previousStatus = transaction.getStatus();
-            transaction.setStatus(providerResponse.getStatus().name());
-            if (providerResponse.getProviderTransactionId() != null && !providerResponse.getProviderTransactionId().isBlank()) {
-                transaction.setProviderTransactionId(providerResponse.getProviderTransactionId());
-            }
-            paymentTransactionRepository.save(transaction);
-
-            log.info("Confirmed transaction {} status: {} -> {}", transaction.getTransactionId(), previousStatus, transaction.getStatus());
-
-            orderEventProducer.sendPaymentStatusUpdate(
-                    transaction.getOrderId(),
-                    transaction.getTransactionId(),
-                    providerResponse.getStatus()
-            );
-        }
-
-        // Return latest persisted state (or current state for PROCESSING).
-        return mapTransactionToResponse(transaction, null, providerResponse.getErrorMessage());
     }
     
     /**

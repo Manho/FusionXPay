@@ -111,16 +111,6 @@ poll_payment_status() {
   done
 }
 
-confirm_payment() {
-  local api_key="$1"
-  local order_id="$2"
-  local payment_channel="$3"
-  curl -fsS -X POST "${BASE_URL}/api/v1/payment/confirm" \
-    -H "Content-Type: application/json" \
-    -H "X-API-Key: ${api_key}" \
-    -d "{\"orderId\":\"${order_id}\",\"paymentChannel\":\"${payment_channel}\"}"
-}
-
 refund_payment() {
   local api_key="$1"
   local transaction_id="$2"
@@ -169,27 +159,15 @@ echo "[INFO] payment status=${status} transactionId=${transaction_id}"
 echo "[ACTION] Open this URL in a browser to complete checkout:"
 echo "$redirect_url"
 
-echo "[ACTION] After you complete checkout, press Enter to confirm..."
-read -r _
-
-echo "[INFO] confirming payment by querying provider API (webhook fallback)..."
-confirm_json="$(confirm_payment "$api_key" "$order_id" "$payment_channel")" || true
-confirm_status="$(json_get "$confirm_json" "status")"
-confirm_provider_tx_id="$(json_get "$confirm_json" "providerTransactionId")"
-confirm_error="$(json_get "$confirm_json" "errorMessage")"
-echo "[INFO] confirm status=${confirm_status} providerTransactionId=${confirm_provider_tx_id}"
-if [[ -n "$confirm_error" ]]; then
-  echo "[WARN] confirm message: ${confirm_error}"
-fi
-
-echo "[INFO] polling payment status..."
-polled="$(poll_payment_status "$api_key" "$order_id" 120)" || true
+echo "[INFO] waiting for payment SUCCESS via webhook/callback..."
+polled="$(poll_payment_status "$api_key" "$order_id" 300)" || true
 polled_status="$(json_get "$polled" "status")"
 provider_tx_id="$(json_get "$polled" "providerTransactionId")"
+
 echo "[INFO] payment polled status=${polled_status} providerTransactionId=${provider_tx_id}"
+
 if [[ "$polled_status" != "SUCCESS" ]]; then
-  echo "[ERROR] payment did not reach SUCCESS (try re-run confirm or check provider status)"
-  echo "$polled"
+  echo "[ERROR] payment did not reach SUCCESS"
   exit 1
 fi
 
@@ -206,3 +184,4 @@ if [[ "$refund_status" != "COMPLETED" ]]; then
 fi
 
 echo "[PASS] refund completed"
+

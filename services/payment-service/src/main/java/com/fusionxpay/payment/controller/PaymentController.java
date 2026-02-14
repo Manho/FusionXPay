@@ -2,7 +2,6 @@ package com.fusionxpay.payment.controller;
 
 import com.fusionxpay.payment.dto.PaymentRequest;
 import com.fusionxpay.payment.dto.PaymentResponse;
-import com.fusionxpay.payment.dto.PaymentConfirmRequest;
 import com.fusionxpay.payment.dto.RefundRequest;
 import com.fusionxpay.payment.dto.RefundResponse;
 import com.fusionxpay.payment.service.PaymentService;
@@ -63,17 +62,6 @@ public class PaymentController {
     public ResponseEntity<RefundResponse> initiateRefund(@Valid @RequestBody RefundRequest refundRequest) {
         log.info("Refund request received for transaction: {}", refundRequest.getTransactionId());
         RefundResponse response = paymentService.initiateRefund(refundRequest);
-        return ResponseEntity.ok(response);
-    }
-
-    @PostMapping("/confirm")
-    @Operation(
-            summary = "Confirm payment status (fallback)",
-            description = "Queries the provider API directly to reconcile a PROCESSING payment when webhooks/callbacks are unavailable"
-    )
-    public ResponseEntity<PaymentResponse> confirmPayment(@Valid @RequestBody PaymentConfirmRequest request) {
-        log.info("Confirm payment requested for orderId={}", request.getOrderId());
-        PaymentResponse response = paymentService.confirmPayment(request);
         return ResponseEntity.ok(response);
     }
 }
