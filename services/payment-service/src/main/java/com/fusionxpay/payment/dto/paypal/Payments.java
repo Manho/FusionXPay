@@ -21,4 +21,3 @@ public class Payments {
     @JsonProperty("captures")
     private List<PayPalCaptureResponse> captures;
 }
-
