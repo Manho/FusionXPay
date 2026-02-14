@@ -424,9 +424,11 @@ public class PayPalProvider implements PaymentProvider {
             PayPalOrderResponse captureResponse = captureOrder(paypalOrderId);
 
             if (captureResponse != null && "COMPLETED".equals(captureResponse.getStatus())) {
+                String captureId = extractFirstCaptureId(captureResponse);
                 return PaymentResponse.builder()
                         .status(PaymentStatus.SUCCESS)
-                        .providerTransactionId(paypalOrderId)
+                        // Persist capture id for refunds when available; fall back to order id.
+                        .providerTransactionId(captureId != null ? captureId : paypalOrderId)
                         .orderId(parseUUID(customId))
                         .paymentChannel(getProviderName())
                         .build();
@@ -514,5 +516,20 @@ public class PayPalProvider implements PaymentProvider {
                 .paymentChannel(getProviderName())
                 .errorMessage(errorMessage)
                 .build();
+    }
+
+    private String extractFirstCaptureId(PayPalOrderResponse orderResponse) {
+        try {
+            if (orderResponse.getPurchaseUnits() == null || orderResponse.getPurchaseUnits().isEmpty()) {
+                return null;
+            }
+            var payments = orderResponse.getPurchaseUnits().get(0).getPayments();
+            if (payments == null || payments.getCaptures() == null || payments.getCaptures().isEmpty()) {
+                return null;
+            }
+            return payments.getCaptures().get(0).getId();
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 }

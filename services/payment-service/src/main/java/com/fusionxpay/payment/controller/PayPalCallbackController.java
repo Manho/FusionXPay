@@ -83,8 +83,29 @@ public class PayPalCallbackController {
                 // Update internal order status
                 if (orderId != null && !orderId.isEmpty()) {
                     try {
+                        // Persist capture id for refunds when available.
+                        String captureId = null;
+                        try {
+                            if (captureResponse.getPurchaseUnits() != null && !captureResponse.getPurchaseUnits().isEmpty()
+                                    && captureResponse.getPurchaseUnits().get(0).getPayments() != null
+                                    && captureResponse.getPurchaseUnits().get(0).getPayments().getCaptures() != null
+                                    && !captureResponse.getPurchaseUnits().get(0).getPayments().getCaptures().isEmpty()) {
+                                captureId = captureResponse.getPurchaseUnits().get(0).getPayments().getCaptures().get(0).getId();
+                            }
+                        } catch (Exception ignored) {
+                            captureId = null;
+                        }
+
+                        UUID orderUuid = UUID.fromString(orderId);
+                        if (captureId != null && !captureId.isBlank()) {
+                            paymentService.updateProviderTransactionId(orderUuid, captureId);
+                            log.info("Stored PayPal captureId for orderId={}", orderId);
+                        } else {
+                            log.warn("PayPal captureId missing in capture response for orderId={}", orderId);
+                        }
+
                         paymentService.updatePaymentStatus(
-                                UUID.fromString(orderId),
+                                orderUuid,
                                 com.fusionxpay.common.model.PaymentStatus.SUCCESS
                         );
                     } catch (Exception e) {

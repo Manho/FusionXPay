@@ -158,26 +158,34 @@ payment_json="$(initiate_payment "$api_key" "$order_id" "$payment_channel")"
 transaction_id="$(json_get "$payment_json" "transactionId")"
 redirect_url="$(json_get "$payment_json" "redirectUrl")"
 status="$(json_get "$payment_json" "status")"
-stripe_session_id="$(json_get "$payment_json" "providerTransactionId")"
+provider_reference_id="$(json_get "$payment_json" "providerTransactionId")"
 
 echo "[INFO] payment status=${status} transactionId=${transaction_id}"
 echo "[ACTION] Open this URL in a browser to complete checkout:"
 echo "$redirect_url"
 
 if [[ "$CHANNEL" == "stripe" ]]; then
-  echo "[INFO] stripe sessionId=${stripe_session_id}"
+  echo "[INFO] stripe sessionId=${provider_reference_id}"
   echo "[ACTION] Complete Stripe checkout, then press Enter to replay the webhook locally..."
   read -r _
 
   # Best-effort: source env from known always-on path if present.
   env_file="/home/denji/.fusionxpay/.env.always-on"
   if [[ -f "$env_file" ]]; then
-    ENV_FILE="$env_file" ORDER_ID="$order_id" SESSION_ID="$stripe_session_id" API_HOST="$API_HOST" API_PORT="$API_PORT" \
+    ENV_FILE="$env_file" ORDER_ID="$order_id" SESSION_ID="$provider_reference_id" API_HOST="$API_HOST" API_PORT="$API_PORT" \
       "${ROOT_DIR}/scripts/stripe-webhook-replay.sh"
   else
-    ORDER_ID="$order_id" SESSION_ID="$stripe_session_id" API_HOST="$API_HOST" API_PORT="$API_PORT" \
+    ORDER_ID="$order_id" SESSION_ID="$provider_reference_id" API_HOST="$API_HOST" API_PORT="$API_PORT" \
       "${ROOT_DIR}/scripts/stripe-webhook-replay.sh"
   fi
+fi
+
+if [[ "$CHANNEL" == "paypal" ]]; then
+  echo "[INFO] paypal orderId=${provider_reference_id}"
+  echo "[ACTION] Complete PayPal approval, then press Enter to trigger the return callback locally..."
+  read -r _
+  # Simulate PayPal redirect back to returnUrl for environments without public ingress.
+  curl -fsS -o /dev/null "${BASE_URL}/api/v1/payment/paypal/return?token=${provider_reference_id}&orderId=${order_id}" || true
 fi
 
 echo "[INFO] waiting for payment SUCCESS via webhook/callback..."
