@@ -9,6 +9,7 @@ import com.stripe.exception.SignatureVerificationException;
 import com.stripe.exception.StripeException;
 import com.stripe.model.Event;
 import com.stripe.model.PaymentIntent;
+import com.stripe.model.Refund;
 import com.stripe.model.checkout.Session;
 import com.stripe.net.Webhook;
 import com.stripe.param.checkout.SessionCreateParams;
@@ -265,7 +266,7 @@ public class StripeProvider implements PaymentProvider {
             } else {
                 return session.getClientReferenceId(); // Fallback to client reference ID which should be orderId
             }
-        } else if (eventType.equals("charge.refunded") || eventType.equals("charge.refund.updated")) {
+        } else if (eventType.equals("charge.refunded")) {
             com.stripe.model.Charge charge = (com.stripe.model.Charge) event.getDataObjectDeserializer().getObject().get();
             // Try to get orderId from charge metadata
             if (charge.getMetadata() != null && charge.getMetadata().containsKey("orderId")) {
@@ -278,6 +279,37 @@ public class StripeProvider implements PaymentProvider {
                     return intent.getMetadata().get("orderId");
                 } catch (StripeException e) {
                     log.error("Error retrieving payment intent for refund: {}", e.getMessage(), e);
+                    return null;
+                }
+            }
+        } else if (eventType.equals("charge.refund.updated")) {
+            // For charge.refund.updated, the event payload object is a Refund (not a Charge).
+            Refund refund = (Refund) event.getDataObjectDeserializer().getObject().get();
+            String paymentIntentId = refund.getPaymentIntent();
+            if (paymentIntentId != null && !paymentIntentId.isBlank()) {
+                try {
+                    PaymentIntent intent = PaymentIntent.retrieve(paymentIntentId);
+                    return intent.getMetadata().get("orderId");
+                } catch (StripeException e) {
+                    log.error("Error retrieving payment intent for refund update: {}", e.getMessage(), e);
+                    return null;
+                }
+            }
+
+            // Fallback: try to retrieve charge, then its payment intent.
+            String chargeId = refund.getCharge();
+            if (chargeId != null && !chargeId.isBlank()) {
+                try {
+                    com.stripe.model.Charge charge = com.stripe.model.Charge.retrieve(chargeId);
+                    if (charge.getMetadata() != null && charge.getMetadata().containsKey("orderId")) {
+                        return charge.getMetadata().get("orderId");
+                    }
+                    if (charge.getPaymentIntent() != null) {
+                        PaymentIntent intent = PaymentIntent.retrieve(charge.getPaymentIntent());
+                        return intent.getMetadata().get("orderId");
+                    }
+                } catch (StripeException e) {
+                    log.error("Error retrieving charge/payment intent for refund update: {}", e.getMessage(), e);
                     return null;
                 }
             }
@@ -349,52 +381,95 @@ public class StripeProvider implements PaymentProvider {
      */
     private PaymentResponse handleRefundEvent(Event event) {
         try {
-            com.stripe.model.Charge charge = (com.stripe.model.Charge) event.getDataObjectDeserializer().getObject().get();
-            String chargeId = charge.getId();
-            String refundStatus = charge.getRefunded() != null && charge.getRefunded() ? "refunded" : "partial_refund";
+            String eventType = event.getType();
+            if ("charge.refunded".equals(eventType)) {
+                com.stripe.model.Charge charge = (com.stripe.model.Charge) event.getDataObjectDeserializer().getObject().get();
+                String chargeId = charge.getId();
+                String refundStatus = charge.getRefunded() != null && charge.getRefunded() ? "refunded" : "partial_refund";
 
-            log.info("Processing Stripe refund event. ChargeId: {}, Refunded: {}, AmountRefunded: {}",
-                    chargeId, charge.getRefunded(), charge.getAmountRefunded());
+                log.info("Processing Stripe refund event. ChargeId: {}, Refunded: {}, AmountRefunded: {}",
+                        chargeId, charge.getRefunded(), charge.getAmountRefunded());
 
-            // Try to get orderId from charge metadata or payment intent
-            String orderId = null;
-            if (charge.getMetadata() != null && charge.getMetadata().containsKey("orderId")) {
-                orderId = charge.getMetadata().get("orderId");
-            } else if (charge.getPaymentIntent() != null) {
-                try {
-                    PaymentIntent intent = PaymentIntent.retrieve(charge.getPaymentIntent());
-                    orderId = intent.getMetadata().get("orderId");
-                } catch (StripeException e) {
-                    log.error("Error retrieving payment intent for refund: {}", e.getMessage(), e);
+                // Try to get orderId from charge metadata or payment intent
+                String orderId = null;
+                if (charge.getMetadata() != null && charge.getMetadata().containsKey("orderId")) {
+                    orderId = charge.getMetadata().get("orderId");
+                } else if (charge.getPaymentIntent() != null) {
+                    try {
+                        PaymentIntent intent = PaymentIntent.retrieve(charge.getPaymentIntent());
+                        orderId = intent.getMetadata().get("orderId");
+                    } catch (StripeException e) {
+                        log.error("Error retrieving payment intent for refund: {}", e.getMessage(), e);
+                    }
                 }
+
+                if (orderId == null) {
+                    log.warn("Could not determine orderId for refund event. ChargeId: {}", chargeId);
+                    return null;
+                }
+
+                // Determine the appropriate status
+                PaymentStatus status = charge.getRefunded() != null && charge.getRefunded()
+                        ? PaymentStatus.REFUNDED
+                        : PaymentStatus.PROCESSING;
+
+                // Keep providerTransactionId pointing at the PaymentIntent so further refunds/queries keep working.
+                String providerTransactionId = charge.getPaymentIntent();
+                if (providerTransactionId == null || providerTransactionId.isBlank()) {
+                    providerTransactionId = chargeId;
+                }
+
+                log.info("Stripe refund processed. OrderId: {}, ChargeId: {}, Status: {}",
+                        orderId, chargeId, refundStatus);
+
+                return PaymentResponse.builder()
+                        .status(status)
+                        .orderId(UUID.fromString(orderId))
+                        .paymentChannel(getProviderName())
+                        .providerTransactionId(providerTransactionId)
+                        .errorMessage("Refund " + refundStatus) // Use errorMessage to indicate refund status
+                        .build();
             }
 
-            if (orderId == null) {
-                log.warn("Could not determine orderId for refund event. ChargeId: {}", chargeId);
-                return null;
+            if ("charge.refund.updated".equals(eventType)) {
+                Refund refund = (Refund) event.getDataObjectDeserializer().getObject().get();
+                String refundId = refund.getId();
+                String refundStatus = refund.getStatus();
+
+                // Resolve orderId via payment intent metadata (preferred).
+                String orderId = null;
+                String providerTransactionId = refund.getPaymentIntent();
+                if (providerTransactionId != null && !providerTransactionId.isBlank()) {
+                    try {
+                        PaymentIntent intent = PaymentIntent.retrieve(providerTransactionId);
+                        orderId = intent.getMetadata().get("orderId");
+                    } catch (StripeException e) {
+                        log.error("Error retrieving payment intent for refund update: {}", e.getMessage(), e);
+                    }
+                }
+
+                if (orderId == null) {
+                    log.warn("Could not determine orderId for refund update event. RefundId: {}", refundId);
+                    return null;
+                }
+
+                PaymentStatus status = "succeeded".equalsIgnoreCase(refundStatus)
+                        ? PaymentStatus.REFUNDED
+                        : PaymentStatus.PROCESSING;
+
+                log.info("Stripe refund updated. OrderId: {}, RefundId: {}, Status: {}",
+                        orderId, refundId, refundStatus);
+
+                return PaymentResponse.builder()
+                        .status(status)
+                        .orderId(UUID.fromString(orderId))
+                        .paymentChannel(getProviderName())
+                        .providerTransactionId(providerTransactionId)
+                        .errorMessage("Refund " + refundStatus)
+                        .build();
             }
 
-            // Determine the appropriate status
-            PaymentStatus status = charge.getRefunded() != null && charge.getRefunded()
-                    ? PaymentStatus.REFUNDED
-                    : PaymentStatus.PROCESSING;
-
-            // Keep providerTransactionId pointing at the PaymentIntent so further refunds/queries keep working.
-            String providerTransactionId = charge.getPaymentIntent();
-            if (providerTransactionId == null || providerTransactionId.isBlank()) {
-                providerTransactionId = chargeId;
-            }
-
-            log.info("Stripe refund processed. OrderId: {}, ChargeId: {}, Status: {}",
-                    orderId, chargeId, refundStatus);
-
-            return PaymentResponse.builder()
-                    .status(status)
-                    .orderId(UUID.fromString(orderId))
-                    .paymentChannel(getProviderName())
-                    .providerTransactionId(providerTransactionId)
-                    .errorMessage("Refund " + refundStatus) // Use errorMessage to indicate refund status
-                    .build();
+            return null;
 
         } catch (Exception e) {
             log.error("Error processing refund event: {}", e.getMessage(), e);
