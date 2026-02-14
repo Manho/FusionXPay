@@ -518,8 +518,20 @@ public class PayPalProvider implements PaymentProvider {
             JsonNode resource = data.path("resource");
             String refundId = resource.path("id").asText();
             String captureId = null;
+            // Prefer structured IDs when present.
+            String directCaptureId = resource.path("capture_id").asText();
+            if (directCaptureId != null && !directCaptureId.isBlank()) {
+                captureId = directCaptureId;
+            } else {
+                String relatedCaptureId = resource.path("supplementary_data")
+                        .path("related_ids")
+                        .path("capture_id").asText();
+                if (relatedCaptureId != null && !relatedCaptureId.isBlank()) {
+                    captureId = relatedCaptureId;
+                }
+            }
             JsonNode links = resource.path("links");
-            if (links.isArray()) {
+            if ((captureId == null || captureId.isBlank()) && links.isArray()) {
                 for (JsonNode link : links) {
                     String href = link.path("href").asText();
                     int idx = href.indexOf("/v2/payments/captures/");
