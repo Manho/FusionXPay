@@ -99,7 +99,9 @@ public class PaymentServiceRefundTest {
         assertNotNull(response);
         assertEquals(RefundStatus.COMPLETED, response.getStatus());
         assertEquals(transactionId.toString(), response.getTransactionId());
-        verify(paymentTransactionRepository).save(any(PaymentTransaction.class));
+        // Refund completion is confirmed asynchronously via provider webhooks; do not mark REFUNDED here.
+        verify(paymentTransactionRepository, never()).save(any(PaymentTransaction.class));
+        assertEquals(PaymentStatus.SUCCESS.name(), successfulTransaction.getStatus());
     }
 
     @Test
@@ -130,9 +132,9 @@ public class PaymentServiceRefundTest {
         // Then
         assertNotNull(response);
         assertEquals(RefundStatus.COMPLETED, response.getStatus());
-        verify(paymentTransactionRepository).save(argThat(tx ->
-                "REFUNDED".equals(tx.getStatus())
-        ));
+        // Refund completion is confirmed asynchronously via provider webhooks; do not mark REFUNDED here.
+        verify(paymentTransactionRepository, never()).save(any(PaymentTransaction.class));
+        assertEquals(PaymentStatus.SUCCESS.name(), successfulTransaction.getStatus());
     }
 
     @Test

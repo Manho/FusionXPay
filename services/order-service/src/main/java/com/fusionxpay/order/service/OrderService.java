@@ -30,6 +30,7 @@ public class OrderService {
     public static final String NEW = "NEW";
     public static final String PROCESSING = "PROCESSING";
     public static final String SUCCESS = "SUCCESS";
+    public static final String REFUNDED = "REFUNDED";
     public static final String FAILED = "FAILED";
 
     @Transactional
@@ -174,7 +175,8 @@ public class OrderService {
         boolean isValidTransition = switch (currentStatus) {
             case NEW -> newStatus.equals(PROCESSING);
             case PROCESSING -> newStatus.equals(SUCCESS) || newStatus.equals(FAILED);
-            case SUCCESS, FAILED -> false; // Terminal states
+            case SUCCESS -> newStatus.equals(REFUNDED);
+            case REFUNDED, FAILED -> false; // Terminal states
             default -> false;
         };
         

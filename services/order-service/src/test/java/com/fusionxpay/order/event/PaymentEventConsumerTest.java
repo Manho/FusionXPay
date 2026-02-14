@@ -14,6 +14,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.UUID;
 
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 @ExtendWith(MockitoExtension.class)
@@ -99,5 +100,26 @@ class PaymentEventConsumerTest {
         // Verify that the order service was called to update the order status
         verify(orderService).updateOrderStatusById(orderId, OrderService.FAILED, "Payment failed");
         verifyNoMoreInteractions(orderService);
+    }
+
+    @Test
+    @DisplayName("Test consuming REFUNDED payment event")
+    void consumeRefundedPaymentEvent() {
+        paymentEvent = new OrderPaymentEvent();
+        paymentEvent.setOrderId(orderId);
+        paymentEvent.setStatus(PaymentStatus.REFUNDED);
+        paymentEvent.setMessage("Refund completed");
+
+        paymentEventConsumer.consumePaymentEvent(paymentEvent);
+
+        verify(orderService).updateOrderStatusById(orderId, OrderService.REFUNDED, "Refund completed");
+        verifyNoMoreInteractions(orderService);
+    }
+
+    @Test
+    @DisplayName("Null event should be skipped")
+    void consumeNullEvent() {
+        paymentEventConsumer.consumePaymentEvent(null);
+        verifyNoInteractions(orderService);
     }
 }

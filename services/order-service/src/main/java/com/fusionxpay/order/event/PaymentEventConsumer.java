@@ -16,6 +16,10 @@ public class PaymentEventConsumer {
     
     @KafkaListener(topics = "${kafka.topics.payment-events}", groupId = "${spring.kafka.consumer.group-id}")
     public void consumePaymentEvent(OrderPaymentEvent event) {
+        if (event == null) {
+            log.warn("Received null payment event (likely deserialization failure). Skipping.");
+            return;
+        }
         log.info("Received payment event for order: {}, status: {}", event.getOrderId(), event.getStatus());
         
         try {
@@ -26,6 +30,9 @@ public class PaymentEventConsumer {
                     break;
                 case SUCCESS:
                     orderService.updateOrderStatusById(event.getOrderId(), OrderService.SUCCESS, event.getMessage());
+                    break;
+                case REFUNDED:
+                    orderService.updateOrderStatusById(event.getOrderId(), OrderService.REFUNDED, event.getMessage());
                     break;
                 case FAILED:
                     orderService.updateOrderStatusById(event.getOrderId(), OrderService.FAILED, event.getMessage());
