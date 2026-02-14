@@ -1,5 +1,7 @@
 package com.fusionxpay.payment.dto.paypal;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -15,6 +17,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class PayPalWebhookHeaders {
 
     /**
@@ -50,6 +53,7 @@ public class PayPalWebhookHeaders {
     /**
      * Check if all required headers are present.
      */
+    @JsonIgnore
     public boolean isComplete() {
         return authAlgo != null && !authAlgo.isEmpty() &&
                certUrl != null && !certUrl.isEmpty() &&
