@@ -121,6 +121,12 @@
             <artifactId>kafka</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- WireMock for deterministic gateway integration tests -->
+        <dependency>
+            <groupId>org.wiremock</groupId>
+            <artifactId>wiremock-standalone</artifactId>
+            <scope>test</scope>
+        </dependency>
         <!-- Common test utilities (test-jar) -->
         <dependency>
             <groupId>com.fusionxpay</groupId>
