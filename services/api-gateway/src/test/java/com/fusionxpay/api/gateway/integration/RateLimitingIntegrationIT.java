@@ -64,10 +64,11 @@ class RateLimitingIntegrationIT extends AbstractIntegrationTest {
 
         // Point gateway routes to a deterministic local backend so rate limiting tests
         // don't depend on service discovery / downstream availability.
-        // NOTE: The indices match the order in services/api-gateway/src/main/resources/application.yml.
-        registry.add("spring.cloud.gateway.routes[0].uri", () -> backendUrl); // admin-login-v1
-        registry.add("spring.cloud.gateway.routes[2].uri", () -> backendUrl); // order-v1
-        registry.add("spring.cloud.gateway.routes[4].uri", () -> backendUrl); // payment-v1
+        // Uses URI template variables defined in application.yml to avoid Spring
+        // property binding conflicts with YAML-defined route lists.
+        registry.add("ADMIN_SERVICE_URI", () -> backendUrl);
+        registry.add("ORDER_SERVICE_URI", () -> backendUrl);
+        registry.add("PAYMENT_SERVICE_URI", () -> backendUrl);
     }
 
     @LocalServerPort
