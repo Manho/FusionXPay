@@ -11,16 +11,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.cloud.gateway.filter.ratelimit.KeyResolver;
-import org.springframework.cloud.gateway.filter.ratelimit.RedisRateLimiter;
-import org.springframework.cloud.gateway.route.RouteLocator;
-import org.springframework.cloud.gateway.route.builder.RouteLocatorBuilder;
-import org.springframework.context.annotation.Bean;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
@@ -64,6 +58,18 @@ class RateLimitingIntegrationIT extends AbstractIntegrationTest {
         return backendServer;
     }
 
+    @DynamicPropertySource
+    static void overrideGatewayBackends(DynamicPropertyRegistry registry) {
+        String backendUrl = "http://localhost:" + ensureBackendServer().port();
+
+        // Point gateway routes to a deterministic local backend so rate limiting tests
+        // don't depend on service discovery / downstream availability.
+        // NOTE: The indices match the order in services/api-gateway/src/main/resources/application.yml.
+        registry.add("spring.cloud.gateway.routes[0].uri", () -> backendUrl); // admin-login-v1
+        registry.add("spring.cloud.gateway.routes[2].uri", () -> backendUrl); // order-v1
+        registry.add("spring.cloud.gateway.routes[4].uri", () -> backendUrl); // payment-v1
+    }
+
     @LocalServerPort
     private int port;
 
@@ -90,54 +96,6 @@ class RateLimitingIntegrationIT extends AbstractIntegrationTest {
                 .build();
 
         userRepository.deleteAll();
-    }
-
-    @TestConfiguration
-    static class TestOverrideRoutesConfig {
-
-        @Bean
-        RouteLocator testOverrideRoutes(
-                RouteLocatorBuilder builder,
-                @Qualifier("ipKeyResolver") KeyResolver ipKeyResolver,
-                @Qualifier("apiKeyKeyResolver") KeyResolver apiKeyKeyResolver,
-                @Value("${app.rate-limit.login.replenish-rate}") int loginReplenishRate,
-                @Value("${app.rate-limit.login.burst-capacity}") int loginBurstCapacity,
-                @Value("${app.rate-limit.login.requested-tokens}") int loginRequestedTokens,
-                @Value("${app.rate-limit.payment.replenish-rate}") int paymentReplenishRate,
-                @Value("${app.rate-limit.payment.burst-capacity}") int paymentBurstCapacity,
-                @Value("${app.rate-limit.payment.requested-tokens}") int paymentRequestedTokens,
-                @Value("${app.rate-limit.orders.replenish-rate}") int ordersReplenishRate,
-                @Value("${app.rate-limit.orders.burst-capacity}") int ordersBurstCapacity,
-                @Value("${app.rate-limit.orders.requested-tokens}") int ordersRequestedTokens
-        ) {
-            String backendUrl = "http://localhost:" + ensureBackendServer().port();
-
-            // Provide deterministic local backends for rate-limiting tests.
-            // This avoids flakiness from service discovery / downstream availability.
-            return builder.routes()
-                    .route("test-admin-login-v1", r -> r.order(-200)
-                            .path("/api/v1/admin/auth/login")
-                            .filters(f -> f.requestRateLimiter(c -> {
-                                c.setKeyResolver(ipKeyResolver);
-                                c.setRateLimiter(new RedisRateLimiter(loginReplenishRate, loginBurstCapacity, loginRequestedTokens));
-                            }))
-                            .uri(backendUrl))
-                    .route("test-payment-v1", r -> r.order(-200)
-                            .path("/api/v1/payment/request")
-                            .filters(f -> f.requestRateLimiter(c -> {
-                                c.setKeyResolver(apiKeyKeyResolver);
-                                c.setRateLimiter(new RedisRateLimiter(paymentReplenishRate, paymentBurstCapacity, paymentRequestedTokens));
-                            }))
-                            .uri(backendUrl))
-                    .route("test-orders-v1", r -> r.order(-200)
-                            .path("/api/v1/orders", "/api/v1/orders/**")
-                            .filters(f -> f.requestRateLimiter(c -> {
-                                c.setKeyResolver(apiKeyKeyResolver);
-                                c.setRateLimiter(new RedisRateLimiter(ordersReplenishRate, ordersBurstCapacity, ordersRequestedTokens));
-                            }))
-                            .uri(backendUrl))
-                    .build();
-        }
     }
 
     @Test
