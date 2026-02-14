@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fusionxpay.payment.dto.paypal.PayPalOrderResponse;
 import com.fusionxpay.payment.dto.paypal.PayPalWebhookHeaders;
 import com.fusionxpay.payment.provider.PayPalProvider;
+import com.fusionxpay.payment.service.IdempotencyService;
 import com.fusionxpay.payment.service.PaymentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -13,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.view.RedirectView;
 
+import java.time.Duration;
 import java.util.UUID;
 
 /**
@@ -30,6 +32,7 @@ public class PayPalCallbackController {
 
     private final PayPalProvider payPalProvider;
     private final PaymentService paymentService;
+    private final IdempotencyService idempotencyService;
 
     @Value("${payment.frontend.success-url:http://localhost:3000/payment/success}")
     private String frontendSuccessUrl;
@@ -67,6 +70,25 @@ public class PayPalCallbackController {
                 return new RedirectView(frontendErrorUrl + "?error=missing_token");
             }
 
+            // Idempotency: PayPal/browser may trigger return multiple times (refresh/retry).
+            // We must ensure we don't repeatedly call capture and produce 422 in PayPal logs.
+            String captureKey = "paypal:return:capture:" + paypalOrderId;
+            String existingState = idempotencyService.getProcessingState(captureKey);
+            if (existingState != null) {
+                log.warn("Skipping PayPal capture for {} due to idempotency state={}", paypalOrderId, existingState);
+                return new RedirectView(frontendSuccessUrl +
+                        "?orderId=" + orderId +
+                        "&paypalOrderId=" + paypalOrderId);
+            }
+
+            boolean lockAcquired = idempotencyService.acquireProcessingLock(captureKey, Duration.ofMinutes(5));
+            if (!lockAcquired) {
+                log.warn("Skipping PayPal capture for {} because lock not acquired", paypalOrderId);
+                return new RedirectView(frontendSuccessUrl +
+                        "?orderId=" + orderId +
+                        "&paypalOrderId=" + paypalOrderId);
+            }
+
             // Avoid duplicate capture calls (browser refresh / retries). If we already stored a capture ID
             // (providerTransactionId changed from PayPal order ID -> capture ID), skip capture.
             if (orderId != null && !orderId.isBlank()) {
@@ -95,6 +117,7 @@ public class PayPalCallbackController {
 
             if (captureResponse == null) {
                 log.error("Failed to capture PayPal order: {}", paypalOrderId);
+                idempotencyService.releaseLock(captureKey);
                 return new RedirectView(frontendErrorUrl + "?error=capture_failed&orderId=" + orderId);
             }
 
@@ -133,11 +156,13 @@ public class PayPalCallbackController {
                     }
                 }
 
+                idempotencyService.markAsCompleted(captureKey, Duration.ofDays(7));
                 return new RedirectView(frontendSuccessUrl +
                         "?orderId=" + orderId +
                         "&paypalOrderId=" + paypalOrderId);
             } else {
                 log.warn("PayPal order not completed. Status: {}", status);
+                idempotencyService.releaseLock(captureKey);
                 return new RedirectView(frontendErrorUrl +
                         "?error=payment_incomplete&status=" + status +
                         "&orderId=" + orderId);

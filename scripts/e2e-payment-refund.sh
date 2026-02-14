@@ -92,13 +92,14 @@ poll_payment_status() {
   local api_key="$1"
   local order_id="$2"
   local deadline_s="${3:-180}"
+  local want_status="${4:-SUCCESS}"
   local start now status body
   start="$(date +%s)"
 
   while true; do
     body="$(curl -fsS "${BASE_URL}/api/v1/payment/order/${order_id}" -H "X-API-Key: ${api_key}")"
     status="$(json_get "$body" "status")"
-    if [[ "$status" == "SUCCESS" ]]; then
+    if [[ "$status" == "$want_status" ]]; then
       echo "$body"
       return 0
     fi
@@ -189,7 +190,7 @@ if [[ "$CHANNEL" == "paypal" ]]; then
 fi
 
 echo "[INFO] waiting for payment SUCCESS via webhook/callback..."
-polled="$(poll_payment_status "$api_key" "$order_id" 300)" || true
+polled="$(poll_payment_status "$api_key" "$order_id" 300 "SUCCESS")" || true
 polled_status="$(json_get "$polled" "status")"
 provider_tx_id="$(json_get "$polled" "providerTransactionId")"
 
@@ -212,4 +213,14 @@ if [[ "$refund_status" != "COMPLETED" ]]; then
   exit 1
 fi
 
-echo "[PASS] refund completed"
+echo "[INFO] waiting for refund webhook to mark payment REFUNDED..."
+post_refund="$(poll_payment_status "$api_key" "$order_id" 300 "REFUNDED")" || true
+post_refund_status="$(json_get "$post_refund" "status")"
+echo "[INFO] post-refund payment status=${post_refund_status}"
+if [[ "$post_refund_status" != "REFUNDED" ]]; then
+  echo "[ERROR] payment did not reach REFUNDED via webhook"
+  echo "$post_refund"
+  exit 1
+fi
+
+echo "[PASS] payment+refund completed (REFUNDED)"
