@@ -11,6 +11,10 @@ set -euo pipefail
 # Usage:
 #   API_HOST=localhost API_PORT=8080 ./scripts/e2e-payment-refund.sh stripe
 #   API_HOST=localhost API_PORT=8080 ./scripts/e2e-payment-refund.sh paypal
+#
+# For demo environments without public ingress for Stripe webhooks:
+# - After completing Stripe checkout, this script will replay a signed webhook event locally
+#   via `scripts/stripe-webhook-replay.sh` to drive the full callback chain.
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 API_HOST="${API_HOST:-localhost}"
@@ -154,10 +158,27 @@ payment_json="$(initiate_payment "$api_key" "$order_id" "$payment_channel")"
 transaction_id="$(json_get "$payment_json" "transactionId")"
 redirect_url="$(json_get "$payment_json" "redirectUrl")"
 status="$(json_get "$payment_json" "status")"
+stripe_session_id="$(json_get "$payment_json" "providerTransactionId")"
 
 echo "[INFO] payment status=${status} transactionId=${transaction_id}"
 echo "[ACTION] Open this URL in a browser to complete checkout:"
 echo "$redirect_url"
+
+if [[ "$CHANNEL" == "stripe" ]]; then
+  echo "[INFO] stripe sessionId=${stripe_session_id}"
+  echo "[ACTION] Complete Stripe checkout, then press Enter to replay the webhook locally..."
+  read -r _
+
+  # Best-effort: source env from known always-on path if present.
+  env_file="/home/denji/.fusionxpay/.env.always-on"
+  if [[ -f "$env_file" ]]; then
+    ENV_FILE="$env_file" ORDER_ID="$order_id" SESSION_ID="$stripe_session_id" API_HOST="$API_HOST" API_PORT="$API_PORT" \
+      "${ROOT_DIR}/scripts/stripe-webhook-replay.sh"
+  else
+    ORDER_ID="$order_id" SESSION_ID="$stripe_session_id" API_HOST="$API_HOST" API_PORT="$API_PORT" \
+      "${ROOT_DIR}/scripts/stripe-webhook-replay.sh"
+  fi
+fi
 
 echo "[INFO] waiting for payment SUCCESS via webhook/callback..."
 polled="$(poll_payment_status "$api_key" "$order_id" 300)" || true
@@ -184,4 +205,3 @@ if [[ "$refund_status" != "COMPLETED" ]]; then
 fi
 
 echo "[PASS] refund completed"
-
