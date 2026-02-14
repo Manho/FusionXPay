@@ -470,26 +470,14 @@ public class PayPalProvider implements PaymentProvider {
 
             log.info("PayPal order approved. PayPalOrderId: {}, OrderId: {}", paypalOrderId, customId);
 
-            // Auto-capture the order
-            PayPalOrderResponse captureResponse = captureOrder(paypalOrderId);
-
-            if (captureResponse != null && "COMPLETED".equals(captureResponse.getStatus())) {
-                String captureId = extractFirstCaptureId(captureResponse);
-                return PaymentResponse.builder()
-                        .status(PaymentStatus.SUCCESS)
-                        // Persist capture id for refunds when available; fall back to order id.
-                        .providerTransactionId(captureId != null ? captureId : paypalOrderId)
-                        .orderId(parseUUID(customId))
-                        .paymentChannel(getProviderName())
-                        .build();
-            } else {
-                return PaymentResponse.builder()
-                        .status(PaymentStatus.PROCESSING)
-                        .providerTransactionId(paypalOrderId)
-                        .orderId(parseUUID(customId))
-                        .paymentChannel(getProviderName())
-                        .build();
-            }
+            // Do not capture here. Capture happens in the return callback or another explicit flow.
+            // Calling capture on ORDER.APPROVED risks duplicate capture (422 ORDER_ALREADY_CAPTURED).
+            return PaymentResponse.builder()
+                    .status(PaymentStatus.PROCESSING)
+                    .providerTransactionId(paypalOrderId)
+                    .orderId(parseUUID(customId))
+                    .paymentChannel(getProviderName())
+                    .build();
 
         } catch (Exception e) {
             log.error("Error processing order approved: {}", e.getMessage(), e);
@@ -529,17 +517,40 @@ public class PayPalProvider implements PaymentProvider {
         try {
             JsonNode resource = data.path("resource");
             String refundId = resource.path("id").asText();
-            String captureId = resource.path("links")
-                    .path(0)
-                    .path("href").asText();
+            String captureId = null;
+            JsonNode links = resource.path("links");
+            if (links.isArray()) {
+                for (JsonNode link : links) {
+                    String href = link.path("href").asText();
+                    int idx = href.indexOf("/v2/payments/captures/");
+                    if (idx >= 0) {
+                        captureId = href.substring(idx + "/v2/payments/captures/".length());
+                        int slash = captureId.indexOf('/');
+                        if (slash > 0) {
+                            captureId = captureId.substring(0, slash);
+                        }
+                        break;
+                    }
+                    idx = href.indexOf("/captures/");
+                    if (idx >= 0) {
+                        captureId = href.substring(idx + "/captures/".length());
+                        int slash = captureId.indexOf('/');
+                        if (slash > 0) {
+                            captureId = captureId.substring(0, slash);
+                        }
+                        break;
+                    }
+                }
+            }
 
-            log.info("PayPal refund completed. RefundId: {}", refundId);
+            log.info("PayPal refund completed. RefundId: {}, CaptureId: {}", refundId, captureId);
 
+            // Use captureId as providerTransactionId so we can locate the original transaction and mark it REFUNDED.
             return PaymentResponse.builder()
-                    .status(PaymentStatus.SUCCESS)
-                    .providerTransactionId(refundId)
+                    .status(PaymentStatus.REFUNDED)
+                    .providerTransactionId(captureId)
                     .paymentChannel(getProviderName())
-                    .errorMessage("Refund completed")
+                    .errorMessage("Refund completed: " + refundId)
                     .build();
 
         } catch (Exception e) {

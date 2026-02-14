@@ -166,20 +166,30 @@ public class PaymentService {
             }
 
             if (response.getOrderId() == null) {
-                log.error("Invalid callback response from provider: {}, missing Order ID", provider);
-                return false;
+                log.warn("Callback response from provider {} missing Order ID. Will try to resolve by providerTransactionId.", provider);
             }
             
             // Find and update transaction record
-            Optional<PaymentTransaction> optionalTransaction = 
-                paymentTransactionRepository.findByOrderId(response.getOrderId());
+            Optional<PaymentTransaction> optionalTransaction = Optional.empty();
+            if (response.getOrderId() != null) {
+                optionalTransaction = paymentTransactionRepository.findByOrderId(response.getOrderId());
+            }
+            if (optionalTransaction.isEmpty()
+                    && response.getProviderTransactionId() != null
+                    && !response.getProviderTransactionId().isBlank()) {
+                optionalTransaction = paymentTransactionRepository.findByProviderTransactionId(response.getProviderTransactionId());
+            }
             
             if (optionalTransaction.isEmpty()) {
-                log.error("Transaction not found: {}", response.getOrderId());
+                log.error("Transaction not found for provider {} (orderId={}, providerTransactionId={})",
+                        provider, response.getOrderId(), response.getProviderTransactionId());
                 return false;
             }
 
             PaymentTransaction transaction = optionalTransaction.get();
+            if (response.getOrderId() == null) {
+                response.setOrderId(transaction.getOrderId());
+            }
             
             // Log status change
             log.info("Updating transaction {} status: {} -> {}", 
@@ -476,12 +486,9 @@ public class PaymentService {
                         .build();
             }
 
-            // Update transaction status if refund was successful
-            if (refundResponse.getStatus() == RefundStatus.COMPLETED) {
-                transaction.setStatus(PaymentStatus.REFUNDED.name());
-                paymentTransactionRepository.save(transaction);
-                log.info("Transaction {} marked as REFUNDED", transactionId);
-            }
+            // Do not mark the transaction as REFUNDED here.
+            // For both Stripe and PayPal we rely on provider webhooks to confirm refund completion
+            // and update the transaction status asynchronously.
 
             // Set transaction ID in response
             refundResponse.setTransactionId(transactionId.toString());
