@@ -31,6 +31,11 @@ public class PaymentService {
     private final PaymentProviderFactory paymentProviderFactory;
     private final OrderEventProducer orderEventProducer;
 
+    @Transactional(readOnly = true)
+    public Optional<PaymentTransaction> findTransactionByOrderId(UUID orderId) {
+        return paymentTransactionRepository.findByOrderId(orderId);
+    }
+
     /**
      * Initiates a payment transaction
      * 

@@ -67,6 +67,26 @@ public class PayPalCallbackController {
                 return new RedirectView(frontendErrorUrl + "?error=missing_token");
             }
 
+            // If we already recorded a successful payment, do not attempt to capture again.
+            if (orderId != null && !orderId.isBlank()) {
+                try {
+                    UUID orderUuid = UUID.fromString(orderId);
+                    var txOpt = paymentService.findTransactionByOrderId(orderUuid);
+                    if (txOpt.isPresent()) {
+                        String st = txOpt.get().getStatus();
+                        if (com.fusionxpay.common.model.PaymentStatus.SUCCESS.name().equals(st)
+                                || com.fusionxpay.common.model.PaymentStatus.REFUNDED.name().equals(st)) {
+                            log.warn("Skipping PayPal capture because payment already {} for order {}", st, orderId);
+                            return new RedirectView(frontendSuccessUrl +
+                                    "?orderId=" + orderId +
+                                    "&paypalOrderId=" + paypalOrderId);
+                        }
+                    }
+                } catch (Exception ignored) {
+                    // Ignore parse/lookup errors and proceed with capture.
+                }
+            }
+
             // Capture the payment
             PayPalOrderResponse captureResponse = payPalProvider.captureOrder(paypalOrderId);
 

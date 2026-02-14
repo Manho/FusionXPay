@@ -14,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
@@ -268,9 +269,58 @@ public class PayPalProvider implements PaymentProvider {
 
             return response;
 
+        } catch (HttpStatusCodeException e) {
+            // PayPal returns 422 ORDER_ALREADY_CAPTURED when the return URL is hit multiple times
+            // (browser refresh, duplicate redirects, retries). Treat it as idempotent by fetching
+            // the order and continuing if it is already COMPLETED.
+            String body = e.getResponseBodyAsString();
+            if (e.getStatusCode() == HttpStatus.UNPROCESSABLE_ENTITY
+                    && body != null
+                    && body.contains("ORDER_ALREADY_CAPTURED")) {
+                log.warn("PayPal order {} already captured (422). Fetching order details.", paypalOrderId);
+                PayPalOrderResponse existing = getOrder(paypalOrderId);
+                if (existing != null) {
+                    log.info("Fetched PayPal order {}. Status: {}", paypalOrderId, existing.getStatus());
+                    return existing;
+                }
+            }
+
+            log.error("Error capturing PayPal order {}. Status: {}, Body: {}",
+                    paypalOrderId, e.getStatusCode(), body);
+            throw new RuntimeException("Failed to capture PayPal order: " + e.getMessage(), e);
         } catch (Exception e) {
             log.error("Error capturing PayPal order {}: {}", paypalOrderId, e.getMessage(), e);
             throw new RuntimeException("Failed to capture PayPal order: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Gets a PayPal order by ID.
+     *
+     * @param paypalOrderId the PayPal order ID
+     * @return order details
+     */
+    public PayPalOrderResponse getOrder(String paypalOrderId) {
+        try {
+            String accessToken = payPalAuthService.getAccessToken();
+            String baseUrl = payPalAuthService.getBaseUrl();
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setBearerAuth(accessToken);
+
+            HttpEntity<Void> request = new HttpEntity<>(headers);
+
+            ResponseEntity<PayPalOrderResponse> responseEntity = restTemplate.exchange(
+                    baseUrl + "/v2/checkout/orders/" + paypalOrderId,
+                    HttpMethod.GET,
+                    request,
+                    PayPalOrderResponse.class
+            );
+
+            return responseEntity.getBody();
+        } catch (Exception e) {
+            log.error("Error fetching PayPal order {}: {}", paypalOrderId, e.getMessage(), e);
+            return null;
         }
     }
 

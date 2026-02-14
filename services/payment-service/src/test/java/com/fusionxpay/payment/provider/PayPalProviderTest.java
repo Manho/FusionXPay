@@ -2,6 +2,7 @@ package com.fusionxpay.payment.provider;
 
 import com.fusionxpay.common.model.PaymentStatus;
 import com.fusionxpay.payment.dto.PaymentResponse;
+import com.fusionxpay.payment.dto.paypal.PayPalOrderResponse;
 import com.fusionxpay.payment.service.IdempotencyService;
 import com.fusionxpay.payment.service.PayPalAuthService;
 import org.junit.jupiter.api.BeforeEach;
@@ -9,9 +10,18 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.test.web.client.MockRestServiceServer;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 /**
  * Unit tests for PayPalProvider
@@ -106,6 +116,41 @@ public class PayPalProviderTest {
         // Then
         assertNotNull(response);
         assertEquals(PaymentStatus.FAILED, response.getStatus());
+    }
+
+    @Test
+    void testCaptureOrder_OrderAlreadyCaptured_TreatAsIdempotent() {
+        // Given
+        String baseUrl = "https://api.sandbox.paypal.com";
+        String paypalOrderId = "6GD03371FN609620H";
+
+        when(payPalAuthService.getAccessToken()).thenReturn("test-access-token");
+        when(payPalAuthService.getBaseUrl()).thenReturn(baseUrl);
+
+        var restTemplate = (org.springframework.web.client.RestTemplate) ReflectionTestUtils.getField(payPalProvider, "restTemplate");
+        assertNotNull(restTemplate);
+
+        MockRestServiceServer server = MockRestServiceServer.createServer(restTemplate);
+
+        server.expect(requestTo(baseUrl + "/v2/checkout/orders/" + paypalOrderId + "/capture"))
+                .andExpect(method(HttpMethod.POST))
+                .andRespond(withStatus(HttpStatus.UNPROCESSABLE_ENTITY)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"name\":\"UNPROCESSABLE_ENTITY\",\"details\":[{\"issue\":\"ORDER_ALREADY_CAPTURED\"}]}"));
+
+        server.expect(requestTo(baseUrl + "/v2/checkout/orders/" + paypalOrderId))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess(
+                        "{\"id\":\"" + paypalOrderId + "\",\"status\":\"COMPLETED\",\"purchase_units\":[{\"payments\":{\"captures\":[{\"id\":\"CAPTURE123\",\"status\":\"COMPLETED\"}]}}]}",
+                        MediaType.APPLICATION_JSON));
+
+        // When
+        PayPalOrderResponse response = payPalProvider.captureOrder(paypalOrderId);
+
+        // Then
+        assertNotNull(response);
+        assertEquals("COMPLETED", response.getStatus());
+        server.verify();
     }
 
 }
