@@ -6,6 +6,18 @@ COMPOSE_FILE="${ROOT_DIR}/docker-compose.always-on.yml"
 ENV_FILE="${1:-${ROOT_DIR}/.env.always-on}"
 DEPLOY_LOG_FILE="$(mktemp "${TMPDIR:-/tmp}/fusionxpay-deploy.XXXXXX.log")"
 
+compose() {
+  docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" "$@"
+}
+
+is_transient_registry_error() {
+  local log_file="$1"
+  # Common transient network/registry issues observed on self-hosted runners.
+  rg -n -i \
+    'failed to copy:|httpReadSeeker: failed|unexpected EOF|(^|[^a-z])EOF([^a-z]|$)|tls handshake timeout|connection reset by peer|i/o timeout|temporary failure in name resolution|net/http: request canceled|503 Service Unavailable|429 Too Many Requests' \
+    "${log_file}" >/dev/null 2>&1
+}
+
 cleanup() {
   rm -f "${DEPLOY_LOG_FILE}"
 }
@@ -27,7 +39,7 @@ if ! grep -Eq '^[[:space:]]*CORS_ALLOWED_ORIGINS=' "${ENV_FILE}"; then
 fi
 echo "[INFO] CORS_ALLOWED_ORIGINS is configured in env file."
 
-docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" config >/dev/null
+compose config >/dev/null
 
 # --- Eureka cleanup: deregister stale instances before redeployment ---
 EUREKA_URL=$(grep -oP '(?<=EUREKA_URL=).*' "${ENV_FILE}" | head -1)
@@ -60,7 +72,7 @@ except: pass
 fi
 
 echo "[INFO] Removing stale containers (if any)..."
-for name in $(docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" config --services); do
+for name in $(compose config --services); do
   cid=$(docker ps -aq -f "name=fusionxpay-${name}" 2>/dev/null || true)
   if [[ -n "${cid}" ]]; then
     echo "[INFO]   Removing stale container fusionxpay-${name} (${cid})"
@@ -69,16 +81,50 @@ for name in $(docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" confi
 done
 
 echo "[INFO] Stopping existing project containers..."
-docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" down --timeout 30 --remove-orphans
+compose down --timeout 30 --remove-orphans
+
+echo "[INFO] Pulling upstream images (with retries on transient failures)..."
+pull_attempt=1
+pull_max_attempts="${DEPLOY_PULL_MAX_ATTEMPTS:-4}"
+pull_backoff_seconds="${DEPLOY_PULL_BACKOFF_SECONDS:-3}"
+while (( pull_attempt <= pull_max_attempts )); do
+  if compose pull 2>&1 | tee "${DEPLOY_LOG_FILE}"; then
+    break
+  fi
+
+  if is_transient_registry_error "${DEPLOY_LOG_FILE}"; then
+    echo "[WARN] docker compose pull hit a transient registry/network error (attempt ${pull_attempt}/${pull_max_attempts})."
+    sleep "${pull_backoff_seconds}"
+    pull_backoff_seconds=$((pull_backoff_seconds * 2))
+    pull_attempt=$((pull_attempt + 1))
+    continue
+  fi
+
+  echo "[ERROR] docker compose pull failed for a non-transient reason."
+  exit 1
+done
+
+if (( pull_attempt > pull_max_attempts )); then
+  echo "[ERROR] docker compose pull failed after ${pull_max_attempts} attempts due to transient registry/network errors."
+  exit 1
+fi
 
 echo "[INFO] Building and starting always-on services..."
-if ! docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d --build --remove-orphans 2>&1 | tee "${DEPLOY_LOG_FILE}"; then
-  if grep -Eq 'container name "/[^"]+" is already in use' "${DEPLOY_LOG_FILE}"; then
-    echo "[WARN] Container name conflict detected. Removing conflicted containers and retrying once..."
+up_attempt=1
+up_max_attempts="${DEPLOY_UP_MAX_ATTEMPTS:-4}"
+up_backoff_seconds="${DEPLOY_UP_BACKOFF_SECONDS:-3}"
+
+while (( up_attempt <= up_max_attempts )); do
+  if compose up -d --build --remove-orphans 2>&1 | tee "${DEPLOY_LOG_FILE}"; then
+    break
+  fi
+
+  if rg -n 'container name "/[^"]+" is already in use' "${DEPLOY_LOG_FILE}" >/dev/null 2>&1; then
+    echo "[WARN] Container name conflict detected. Removing conflicted containers and retrying..."
 
     mapfile -t conflicted_containers < <(
-      grep -E 'container name "/[^"]+" is already in use' "${DEPLOY_LOG_FILE}" \
-        | grep -oE '"/[^"]+"' \
+      rg -n 'container name "/[^"]+" is already in use' "${DEPLOY_LOG_FILE}" \
+        | rg -o '"/[^"]+"' \
         | tr -d '"' \
         | sed 's#^/##' \
         | sort -u
@@ -94,12 +140,26 @@ if ! docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d --build 
       docker rm -f "${container}" >/dev/null || true
     done
 
-    docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d --build --remove-orphans
-  else
-    echo "[ERROR] Deployment failed for a non-container-name-conflict reason."
-    exit 1
+    up_attempt=$((up_attempt + 1))
+    continue
   fi
+
+  if is_transient_registry_error "${DEPLOY_LOG_FILE}"; then
+    echo "[WARN] docker compose up hit a transient registry/network error (attempt ${up_attempt}/${up_max_attempts})."
+    sleep "${up_backoff_seconds}"
+    up_backoff_seconds=$((up_backoff_seconds * 2))
+    up_attempt=$((up_attempt + 1))
+    continue
+  fi
+
+  echo "[ERROR] Deployment failed for a non-transient reason."
+  exit 1
+done
+
+if (( up_attempt > up_max_attempts )); then
+  echo "[ERROR] docker compose up failed after ${up_max_attempts} attempts due to transient registry/network errors."
+  exit 1
 fi
 
 echo "[INFO] Deployment finished. Current status:"
-docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" ps
+compose ps

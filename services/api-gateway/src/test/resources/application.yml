@@ -26,8 +26,9 @@ spring:
           enabled: true
           lower-case-service-id: true
       routes:
+        # Canonical v1 routes exposed via unified public API domain
         - id: admin-login-v1
-          uri: lb://admin-service
+          uri: ${ADMIN_SERVICE_URI:lb://admin-service}
           predicates:
             - Path=/api/v1/admin/auth/login
           filters:
@@ -38,11 +39,11 @@ spring:
                 redis-rate-limiter.burstCapacity: ${app.rate-limit.login.burst-capacity}
                 redis-rate-limiter.requestedTokens: ${app.rate-limit.login.requested-tokens}
         - id: admin-v1
-          uri: lb://admin-service
+          uri: ${ADMIN_SERVICE_URI:lb://admin-service}
           predicates:
             - Path=/api/v1/admin/**
         - id: order-v1
-          uri: lb://order-service
+          uri: ${ORDER_SERVICE_URI:lb://order-service}
           predicates:
             - Path=/api/v1/orders/**
           filters:
@@ -52,8 +53,21 @@ spring:
                 redis-rate-limiter.replenishRate: ${app.rate-limit.orders.replenish-rate}
                 redis-rate-limiter.burstCapacity: ${app.rate-limit.orders.burst-capacity}
                 redis-rate-limiter.requestedTokens: ${app.rate-limit.orders.requested-tokens}
+        # Payment provider callbacks/webhooks do not have our API key header.
+        # Route them explicitly before the general payment route and rate-limit by IP instead.
+        - id: payment-callbacks-v1
+          uri: ${PAYMENT_SERVICE_URI:lb://payment-service}
+          predicates:
+            - Path=/api/v1/payment/webhook/**,/api/v1/payment/paypal/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@ipKeyResolver}"
+                redis-rate-limiter.replenishRate: ${app.rate-limit.payment.replenish-rate}
+                redis-rate-limiter.burstCapacity: ${app.rate-limit.payment.burst-capacity}
+                redis-rate-limiter.requestedTokens: ${app.rate-limit.payment.requested-tokens}
         - id: payment-v1
-          uri: lb://payment-service
+          uri: ${PAYMENT_SERVICE_URI:lb://payment-service}
           predicates:
             - Path=/api/v1/payment/**
           filters:
@@ -64,12 +78,13 @@ spring:
                 redis-rate-limiter.burstCapacity: ${app.rate-limit.payment.burst-capacity}
                 redis-rate-limiter.requestedTokens: ${app.rate-limit.payment.requested-tokens}
         - id: notification-v1
-          uri: lb://notification-service
+          uri: ${NOTIFICATION_SERVICE_URI:lb://notification-service}
           predicates:
             - Path=/api/v1/notifications/**
+
         # Backward-compatible legacy routes (rate-limited to prevent bypass)
         - id: admin-service-legacy
-          uri: lb://admin-service
+          uri: ${ADMIN_SERVICE_URI:lb://admin-service}
           predicates:
             - Path=/admin-service/**
           filters:
@@ -81,7 +96,7 @@ spring:
                 redis-rate-limiter.requestedTokens: ${app.rate-limit.login.requested-tokens}
             - RewritePath=/admin-service/(?<segment>.*), /api/v1/admin/${segment}
         - id: order-service
-          uri: lb://order-service
+          uri: ${ORDER_SERVICE_URI:lb://order-service}
           predicates:
             - Path=/order-service/**
           filters:
@@ -93,7 +108,7 @@ spring:
                 redis-rate-limiter.requestedTokens: ${app.rate-limit.orders.requested-tokens}
             - RewritePath=/order-service/(?<segment>.*), /api/v1/${segment}
         - id: payment-service
-          uri: lb://payment-service
+          uri: ${PAYMENT_SERVICE_URI:lb://payment-service}
           predicates:
             - Path=/payment-service/**
           filters:
@@ -105,7 +120,7 @@ spring:
                 redis-rate-limiter.requestedTokens: ${app.rate-limit.payment.requested-tokens}
             - RewritePath=/payment-service/(?<segment>.*), /api/v1/${segment}
         - id: notification-service
-          uri: lb://notification-service
+          uri: ${NOTIFICATION_SERVICE_URI:lb://notification-service}
           predicates:
             - Path=/notification-service/**
           filters:
