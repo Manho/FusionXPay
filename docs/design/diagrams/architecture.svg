@@ -1,519 +1,166 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<svg
-   width="800"
-   height="600"
-   version="1.1"
-   id="svg30"
-   sodipodi:docname="architecture.svg"
-   inkscape:version="1.4 (e7c3feb1, 2024-10-09)"
-   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
-   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
-   xmlns="http://www.w3.org/2000/svg"
-   xmlns:svg="http://www.w3.org/2000/svg">
-  <defs
-     id="defs30" />
-  <sodipodi:namedview
-     id="namedview30"
-     pagecolor="#ffffff"
-     bordercolor="#000000"
-     borderopacity="0.25"
-     inkscape:showpageshadow="2"
-     inkscape:pageopacity="0.0"
-     inkscape:pagecheckerboard="0"
-     inkscape:deskcolor="#d1d1d1"
-     inkscape:zoom="1.32"
-     inkscape:cx="407.95455"
-     inkscape:cy="323.10606"
-     inkscape:window-width="1568"
-     inkscape:window-height="968"
-     inkscape:window-x="234"
-     inkscape:window-y="25"
-     inkscape:window-maximized="0"
-     inkscape:current-layer="svg30" />
+<svg width="880" height="620" version="1.1"
+     xmlns="http://www.w3.org/2000/svg">
+
   <!-- Background -->
-  <rect
-     width="800"
-     height="600"
-     fill="#f8f9fa"
-     id="rect1" />
+  <rect width="880" height="620" fill="#f8f9fa" rx="8"/>
+
   <!-- Title -->
-  <text
-     x="400"
-     y="30"
-     font-family="Arial"
-     font-size="20"
-     text-anchor="middle"
-     font-weight="bold"
-     id="text1">FusionXPay Architecture</text>
-  <!-- External Actors -->
-  <rect
-     x="50"
-     y="80"
-     width="120"
-     height="60"
-     rx="5"
-     fill="#d4e6f1"
-     stroke="#2874a6"
-     stroke-width="2"
-     id="rect2" />
-  <text
-     x="110"
-     y="115"
-     font-family="Arial"
-     font-size="14"
-     text-anchor="middle"
-     id="text2">Merchant</text>
-  <rect
-     x="650"
-     y="80"
-     width="120"
-     height="60"
-     rx="5"
-     fill="#d5f5e3"
-     stroke="#1e8449"
-     stroke-width="2"
-     id="rect3" />
-  <text
-     x="710"
-     y="115"
-     font-family="Arial"
-     font-size="14"
-     text-anchor="middle"
-     id="text3">Payment Providers</text>
-  <!-- API Gateway -->
-  <rect
-     x="250"
-     y="80"
-     width="300"
-     height="60"
-     rx="5"
-     fill="#e8daef"
-     stroke="#8e44ad"
-     stroke-width="2"
-     id="rect4" />
-  <text
-     x="400"
-     y="115"
-     font-family="Arial"
-     font-size="14"
-     text-anchor="middle"
-     id="text4">API Gateway</text>
-  <!-- Message Queue -->
-  <rect
-     x="250"
-     y="300"
-     width="300"
-     height="60"
-     rx="5"
-     fill="#f9e79f"
-     stroke="#d35400"
-     stroke-width="2"
-     id="rect5" />
-  <text
-     x="400"
-     y="335"
-     font-family="Arial"
-     font-size="14"
-     text-anchor="middle"
-     id="text5">Message Queue (Kafka)</text>
-  <!-- Microservices -->
-  <rect
-     x="100"
-     y="200"
-     width="150"
-     height="60"
-     rx="5"
-     fill="#fadbd8"
-     stroke="#c0392b"
-     stroke-width="2"
-     id="rect6" />
-  <text
-     x="175"
-     y="235"
-     font-family="Arial"
-     font-size="14"
-     text-anchor="middle"
-     id="text6">Order Service</text>
-  <rect
-     x="325"
-     y="200"
-     width="150"
-     height="60"
-     rx="5"
-     fill="#fadbd8"
-     stroke="#c0392b"
-     stroke-width="2"
-     id="rect7" />
-  <text
-     x="400"
-     y="235"
-     font-family="Arial"
-     font-size="14"
-     text-anchor="middle"
-     id="text7">Payment Service</text>
-  <rect
-     x="550"
-     y="200"
-     width="150"
-     height="60"
-     rx="5"
-     fill="#fadbd8"
-     stroke="#c0392b"
-     stroke-width="2"
-     id="rect8" />
-  <text
-     x="625"
-     y="235"
-     font-family="Arial"
-     font-size="14"
-     text-anchor="middle"
-     id="text8">Notification Service</text>
-  <!-- Databases -->
-  <path
-     d="M175,425 C125,425 125,445 175,445 C225,445 225,425 175,425 Z"
-     fill="#aed6f1"
-     stroke="#2874a6"
-     stroke-width="2"
-     id="path8" />
-  <path
-     d="m 174.24242,445 v 20 c -50,0 -50,20 0,20 50,0 50,-20 0,-20 z"
-     fill="#aed6f1"
-     stroke="#2874a6"
-     stroke-width="2"
-     id="path9" />
-  <text
-     x="172.72728"
-     y="478.63638"
-     font-family="Arial"
-     font-size="12px"
-     text-anchor="middle"
-     id="text9">Order DB</text>
-  <path
-     d="M400,425 C350,425 350,445 400,445 C450,445 450,425 400,425 Z"
-     fill="#aed6f1"
-     stroke="#2874a6"
-     stroke-width="2"
-     id="path10" />
-  <path
-     d="M400,445 L400,465 C350,465 350,485 400,485 C450,485 450,465 400,465 Z"
-     fill="#aed6f1"
-     stroke="#2874a6"
-     stroke-width="2"
-     id="path11" />
-  <text
-     x="399.24243"
-     y="477.87878"
-     font-family="Arial"
-     font-size="12px"
-     text-anchor="middle"
-     id="text11">Payment DB</text>
-  <path
-     d="M625,425 C575,425 575,445 625,445 C675,445 675,425 625,425 Z"
-     fill="#aed6f1"
-     stroke="#2874a6"
-     stroke-width="2"
-     id="path12" />
-  <path
-     d="M625,445 L625,465 C575,465 575,485 625,485 C675,485 675,465 625,465 Z"
-     fill="#aed6f1"
-     stroke="#2874a6"
-     stroke-width="2"
-     id="path13" />
-  <text
-     x="681.07019"
-     y="440.47543"
-     font-family="Arial"
-     font-size="11.0258px"
-     text-anchor="middle"
-     id="text13"
-     transform="scale(0.91881725,1.0883557)"
-     style="stroke-width:0.918817">Notification DB</text>
-  <!-- Monitoring Stack -->
-  <rect
-     x="250"
-     y="520"
-     width="300"
-     height="40"
-     rx="5"
-     fill="#d6eaf8"
-     stroke="#2874a6"
-     stroke-width="2"
-     id="rect13" />
-  <text
-     x="400"
-     y="545"
-     font-family="Arial"
-     font-size="14"
-     text-anchor="middle"
-     id="text14">Monitoring  Logging</text>
-  <!-- Connections -->
-  <!-- Merchant to API Gateway -->
-  <line
-     x1="170"
-     y1="110"
-     x2="250"
-     y2="110"
-     stroke="#2c3e50"
-     stroke-width="2"
-     id="line14" />
-  <polygon
-     points="245,105 255,110 245,115"
-     fill="#2c3e50"
-     id="polygon14" />
-  <polygon
-     points="255,110 245,115 245,105 "
-     fill="#2c3e50"
-     id="polygon14-4"
-     transform="rotate(-30.489413,483.36102,-608.83968)" />
-  <!-- Payment Providers to API Gateway -->
-  <line
-     x1="650"
-     y1="110"
-     x2="550"
-     y2="110"
-     stroke="#2c3e50"
-     stroke-width="2"
-     id="line15" />
-  <polygon
-     points="555,105 545,110 555,115"
-     fill="#2c3e50"
-     id="polygon15" />
-  <!-- API Gateway to Services -->
-  <line
-     x1="325"
-     y1="140"
-     x2="175"
-     y2="200"
-     stroke="#2c3e50"
-     stroke-width="2"
-     id="line16" />
-  <polygon
-     points="180,195 175,205 170,195 "
-     fill="#2c3e50"
-     id="polygon16"
-     transform="rotate(-64.983107,175,200)" />
-  <line
-     x1="400"
-     y1="140"
-     x2="400"
-     y2="200"
-     stroke="#2c3e50"
-     stroke-width="2"
-     id="line17" />
-  <polygon
-     points="395,195 405,195 400,205"
-     fill="#2c3e50"
-     id="polygon17" />
-  <line
-     x1="475"
-     y1="140"
-     x2="625"
-     y2="200"
-     stroke="#2c3e50"
-     stroke-width="2"
-     id="line18" />
-  <polygon
-     points="630,195 625,205 620,195 "
-     fill="#2c3e50"
-     id="polygon18"
-     transform="rotate(-56.888658,625,200)" />
-  <!-- Services to Message Queue -->
-  <line
-     x1="175"
-     y1="260"
-     x2="290"
-     y2="300"
-     stroke="#2c3e50"
-     stroke-width="2"
-     id="line19" />
-  <polygon
-     points="285,295 295,305 285,305 "
-     fill="#2c3e50"
-     id="polygon19"
-     transform="rotate(-90,290,300)" />
-  <line
-     x1="400"
-     y1="260"
-     x2="400"
-     y2="300"
-     stroke="#2c3e50"
-     stroke-width="2"
-     id="line20" />
-  <line
-     x1="137.24243"
-     y1="437.0303"
-     x2="137.24243"
-     y2="477.0303"
-     stroke="#2c3e50"
-     stroke-width="2"
-     id="line20-9"
-     style="fill:#2874a6;fill-opacity:1;stroke:#2874a6;stroke-opacity:1" />
-  <line
-     x1="211.75757"
-     y1="435.75757"
-     x2="211.75757"
-     y2="475.75757"
-     stroke="#2c3e50"
-     stroke-width="2"
-     id="line20-9-1"
-     style="fill:#2874a6;fill-opacity:1;stroke:#2874a6;stroke-opacity:1" />
-  <line
-     x1="362.42426"
-     y1="436.72726"
-     x2="362.42426"
-     y2="476.72726"
-     stroke="#2c3e50"
-     stroke-width="2"
-     id="line20-9-1-1"
-     style="fill:#2874a6;fill-opacity:1;stroke:#2874a6;stroke-opacity:1" />
-  <line
-     x1="587.12122"
-     y1="437.09091"
-     x2="587.12122"
-     y2="477.09091"
-     stroke="#2c3e50"
-     stroke-width="2"
-     id="line20-9-1-1-6"
-     style="fill:#2874a6;fill-opacity:1;stroke:#2874a6;stroke-opacity:1" />
-  <line
-     x1="663.42426"
-     y1="436.87878"
-     x2="663.42426"
-     y2="476.87878"
-     stroke="#2c3e50"
-     stroke-width="2"
-     id="line20-9-1-1-6-2"
-     style="fill:#2874a6;fill-opacity:1;stroke:#2874a6;stroke-opacity:1" />
-  <line
-     x1="438.09091"
-     y1="434.30304"
-     x2="438.09091"
-     y2="474.30304"
-     stroke="#2c3e50"
-     stroke-width="2"
-     id="line20-9-1-1-3"
-     style="fill:#2874a6;fill-opacity:1;stroke:#2874a6;stroke-opacity:1" />
-  <polygon
-     points="395,295 405,295 400,305"
-     fill="#2c3e50"
-     id="polygon20" />
-  <line
-     x1="625"
-     y1="260"
-     x2="510"
-     y2="300"
-     stroke="#2c3e50"
-     stroke-width="2"
-     id="line21" />
-  <line
-     x1="643.62885"
-     y1="131.66754"
-     x2="476.02814"
-     y2="200.00932"
-     stroke="#2c3e50"
-     stroke-width="3.15596"
-     id="line21-2"
-     style="stroke-width:2;stroke-dasharray:none" />
-  <polygon
-     points="505,305 505,295 515,295 "
-     fill="#2c3e50"
-     id="polygon21"
-     transform="rotate(-90,510,300)" />
-  <!-- Message Queue to Payment Service only -->
-  <polygon
-     points="395,265 405,265 400,255"
-     fill="#2c3e50"
-     id="polygon22" />
-  <!-- Services to Databases -->
-  <line
-     x1="175"
-     y1="260"
-     x2="175"
-     y2="425"
-     stroke="#2c3e50"
-     stroke-width="2"
-     id="line23" />
-  <polygon
-     points="170,420 180,420 175,430"
-     fill="#2c3e50"
-     id="polygon23" />
-  <line
-     x1="400.27274"
-     y1="358.48486"
-     x2="400.27274"
-     y2="419.69696"
-     stroke="#2c3e50"
-     stroke-width="1.21817"
-     id="line24"
-     style="stroke-width:2;stroke-dasharray:none" />
-  <polygon
-     points="395,420 405,420 400,430"
-     fill="#2c3e50"
-     id="polygon24" />
-  <line
-     x1="625"
-     y1="260"
-     x2="625"
-     y2="425"
-     stroke="#2c3e50"
-     stroke-width="2"
-     id="line25" />
-  <polygon
-     points="620,420 630,420 625,430"
-     fill="#2c3e50"
-     id="polygon25" />
-  <!-- Everything connects to Monitoring -->
-  <line
-     x1="175"
-     y1="485"
-     x2="250"
-     y2="520"
-     stroke="#2c3e50"
-     stroke-width="1"
-     stroke-dasharray="3,3"
-     id="line26" />
-  <line
-     x1="400"
-     y1="485"
-     x2="400"
-     y2="520"
-     stroke="#2c3e50"
-     stroke-width="1"
-     stroke-dasharray="3,3"
-     id="line27" />
-  <line
-     x1="625"
-     y1="485"
-     x2="550"
-     y2="520"
-     stroke="#2c3e50"
-     stroke-width="1"
-     stroke-dasharray="3,3"
-     id="line28" />
-  <line
-     x1="250"
-     y1="360"
-     x2="300"
-     y2="520"
-     stroke="#2c3e50"
-     stroke-width="1"
-     stroke-dasharray="3,3"
-     id="line29" />
-  <line
-     x1="550"
-     y1="360"
-     x2="500"
-     y2="520"
-     stroke="#2c3e50"
-     stroke-width="1"
-     stroke-dasharray="3,3"
-     id="line30" />
-  <!-- Message Queue Topics -->
-  <text
-     x="400"
-     y="380"
-     font-family="Arial"
-     font-size="10"
-     text-anchor="middle"
-     id="text30">order-status-updates | order-status-finalize | payment-notifications</text>
+  <text x="440" y="32" font-family="Inter, Arial, sans-serif" font-size="18"
+        text-anchor="middle" font-weight="bold" fill="#1a1a2e">FusionXPay Architecture</text>
+
+  <!-- ==================== Layer 1: Gateway ==================== -->
+  <rect x="240" y="56" width="400" height="56" rx="8"
+        fill="#ede7f6" stroke="#7c4dff" stroke-width="2"/>
+  <text x="440" y="82" font-family="Inter, Arial, sans-serif" font-size="14"
+        text-anchor="middle" font-weight="bold" fill="#4a148c">API Gateway</text>
+  <text x="440" y="100" font-family="Inter, Arial, sans-serif" font-size="11"
+        text-anchor="middle" fill="#7c4dff">Rate Limiting  ·  API Key Auth  ·  RBAC</text>
+
+  <!-- Gateway port label -->
+  <text x="648" y="90" font-family="monospace" font-size="10"
+        fill="#9e9e9e">:8080</text>
+
+  <!-- ==================== Layer 2: Services ==================== -->
+
+  <!-- Order Service -->
+  <rect x="40" y="175" width="160" height="56" rx="8"
+        fill="#e3f2fd" stroke="#1976d2" stroke-width="2"/>
+  <text x="120" y="200" font-family="Inter, Arial, sans-serif" font-size="13"
+        text-anchor="middle" font-weight="bold" fill="#0d47a1">Order Service</text>
+  <text x="120" y="218" font-family="Inter, Arial, sans-serif" font-size="10"
+        text-anchor="middle" fill="#1976d2">Merchant Isolation</text>
+  <text x="208" y="206" font-family="monospace" font-size="10" fill="#9e9e9e">:8082</text>
+
+  <!-- Payment Service -->
+  <rect x="250" y="175" width="160" height="56" rx="8"
+        fill="#e8f5e9" stroke="#388e3c" stroke-width="2"/>
+  <text x="330" y="200" font-family="Inter, Arial, sans-serif" font-size="13"
+        text-anchor="middle" font-weight="bold" fill="#1b5e20">Payment Service</text>
+  <text x="330" y="218" font-family="Inter, Arial, sans-serif" font-size="10"
+        text-anchor="middle" fill="#388e3c">Stripe · PayPal</text>
+  <text x="418" y="206" font-family="monospace" font-size="10" fill="#9e9e9e">:8081</text>
+
+  <!-- Admin Service -->
+  <rect x="460" y="175" width="160" height="56" rx="8"
+        fill="#fff3e0" stroke="#f57c00" stroke-width="2"/>
+  <text x="540" y="200" font-family="Inter, Arial, sans-serif" font-size="13"
+        text-anchor="middle" font-weight="bold" fill="#e65100">Admin Service</text>
+  <text x="540" y="218" font-family="Inter, Arial, sans-serif" font-size="10"
+        text-anchor="middle" fill="#f57c00">JWT Auth</text>
+  <text x="628" y="206" font-family="monospace" font-size="10" fill="#9e9e9e">:8084</text>
+
+  <!-- Notification Service -->
+  <rect x="670" y="175" width="170" height="56" rx="8"
+        fill="#fce4ec" stroke="#c62828" stroke-width="2"/>
+  <text x="755" y="200" font-family="Inter, Arial, sans-serif" font-size="13"
+        text-anchor="middle" font-weight="bold" fill="#b71c1c">Notification Service</text>
+  <text x="755" y="218" font-family="Inter, Arial, sans-serif" font-size="10"
+        text-anchor="middle" fill="#c62828">Async Events</text>
+  <text x="848" y="206" font-family="monospace" font-size="10" fill="#9e9e9e">:8083</text>
+
+  <!-- ==================== Gateway → Services arrows ==================== -->
+  <!-- GW → Order -->
+  <line x1="320" y1="112" x2="120" y2="175" stroke="#5c6bc0" stroke-width="1.5"/>
+  <polygon points="124,170 116,170 120,179" fill="#5c6bc0"/>
+
+  <!-- GW → Payment -->
+  <line x1="390" y1="112" x2="330" y2="175" stroke="#5c6bc0" stroke-width="1.5"/>
+  <polygon points="334,170 326,170 330,179" fill="#5c6bc0"/>
+
+  <!-- GW → Admin -->
+  <line x1="490" y1="112" x2="540" y2="175" stroke="#5c6bc0" stroke-width="1.5"/>
+  <polygon points="544,170 536,170 540,179" fill="#5c6bc0"/>
+
+  <!-- GW → Notification -->
+  <line x1="560" y1="112" x2="755" y2="175" stroke="#5c6bc0" stroke-width="1.5"/>
+  <polygon points="759,170 751,170 755,179" fill="#5c6bc0"/>
+
+  <!-- ==================== Inter-service calls ==================== -->
+
+  <!-- Payment → Order (Feign: update status) -->
+  <line x1="250" y1="195" x2="200" y2="195" stroke="#1976d2" stroke-width="1.5"
+        stroke-dasharray="6,3"/>
+  <polygon points="205,191 197,195 205,199" fill="#1976d2"/>
+  <text x="225" y="189" font-family="Inter, Arial, sans-serif" font-size="9"
+        text-anchor="middle" fill="#1976d2">Feign</text>
+
+  <!-- Admin → Order (REST: query orders) -->
+  <path d="M 460,215 Q 350,260 200,215" stroke="#f57c00" stroke-width="1.5"
+        stroke-dasharray="6,3" fill="none"/>
+  <polygon points="205,211 197,215 205,219" fill="#f57c00"/>
+  <text x="340" y="253" font-family="Inter, Arial, sans-serif" font-size="9"
+        text-anchor="middle" fill="#f57c00">REST (query orders)</text>
+
+  <!-- ==================== Layer 3: Kafka ==================== -->
+  <rect x="200" y="300" width="480" height="50" rx="8"
+        fill="#fff8e1" stroke="#ff8f00" stroke-width="2"/>
+  <text x="440" y="322" font-family="Inter, Arial, sans-serif" font-size="13"
+        text-anchor="middle" font-weight="bold" fill="#e65100">Apache Kafka</text>
+  <text x="440" y="340" font-family="monospace" font-size="10"
+        text-anchor="middle" fill="#ff8f00">topic: payment-events</text>
+
+  <!-- Payment → Kafka (produce) -->
+  <line x1="330" y1="231" x2="330" y2="300" stroke="#ff8f00" stroke-width="1.5"/>
+  <polygon points="326,295 334,295 330,304" fill="#ff8f00"/>
+  <text x="345" y="270" font-family="Inter, Arial, sans-serif" font-size="9"
+        fill="#ff8f00" font-style="italic">produce</text>
+
+  <!-- Kafka → Order (consume) -->
+  <line x1="300" y1="300" x2="140" y2="231" stroke="#1976d2" stroke-width="1.5"/>
+  <polygon points="144,236 136,236 140,227" fill="#1976d2"/>
+  <text x="200" y="272" font-family="Inter, Arial, sans-serif" font-size="9"
+        fill="#1976d2" font-style="italic">consume</text>
+
+  <!-- Kafka → Notification (consume) -->
+  <line x1="580" y1="300" x2="740" y2="231" stroke="#c62828" stroke-width="1.5"/>
+  <polygon points="744,236 736,236 740,227" fill="#c62828"/>
+  <text x="680" y="272" font-family="Inter, Arial, sans-serif" font-size="9"
+        fill="#c62828" font-style="italic">consume</text>
+
+  <!-- ==================== Layer 4: Data Stores ==================== -->
+
+  <!-- MySQL -->
+  <ellipse cx="260" cy="430" rx="80" ry="14" fill="#bbdefb" stroke="#1565c0" stroke-width="2"/>
+  <rect x="180" y="430" width="160" height="30" fill="#bbdefb" stroke="none"/>
+  <ellipse cx="260" cy="460" rx="80" ry="14" fill="#bbdefb" stroke="#1565c0" stroke-width="2"/>
+  <line x1="180" y1="430" x2="180" y2="460" stroke="#1565c0" stroke-width="2"/>
+  <line x1="340" y1="430" x2="340" y2="460" stroke="#1565c0" stroke-width="2"/>
+  <text x="260" y="450" font-family="Inter, Arial, sans-serif" font-size="13"
+        text-anchor="middle" font-weight="bold" fill="#0d47a1">MySQL</text>
+  <text x="260" y="490" font-family="Inter, Arial, sans-serif" font-size="10"
+        text-anchor="middle" fill="#1565c0">All services share one database</text>
+  <text x="348" y="450" font-family="monospace" font-size="10" fill="#9e9e9e">:3306</text>
+
+  <!-- Redis -->
+  <rect x="500" y="420" width="160" height="54" rx="8"
+        fill="#ffebee" stroke="#d32f2f" stroke-width="2"/>
+  <text x="580" y="445" font-family="Inter, Arial, sans-serif" font-size="13"
+        text-anchor="middle" font-weight="bold" fill="#b71c1c">Redis</text>
+  <text x="580" y="462" font-family="Inter, Arial, sans-serif" font-size="10"
+        text-anchor="middle" fill="#d32f2f">Rate Limit · Idempotency</text>
+  <text x="668" y="450" font-family="monospace" font-size="10" fill="#9e9e9e">:6379</text>
+
+  <!-- Services → MySQL -->
+  <line x1="120" y1="231" x2="220" y2="420" stroke="#1565c0" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="330" y1="350" x2="270" y2="420" stroke="#1565c0" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="540" y1="231" x2="290" y2="420" stroke="#1565c0" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="755" y1="231" x2="310" y2="420" stroke="#1565c0" stroke-width="1" stroke-dasharray="4,3"/>
+
+  <!-- GW → Redis -->
+  <line x1="580" y1="112" x2="580" y2="420" stroke="#d32f2f" stroke-width="1" stroke-dasharray="4,3"/>
+
+  <!-- Payment → Redis -->
+  <line x1="380" y1="231" x2="530" y2="420" stroke="#d32f2f" stroke-width="1" stroke-dasharray="4,3"/>
+
+  <!-- ==================== Layer 5: Monitoring ==================== -->
+  <rect x="200" y="540" width="480" height="44" rx="8"
+        fill="#e8eaf6" stroke="#3f51b5" stroke-width="1.5"/>
+  <text x="440" y="566" font-family="Inter, Arial, sans-serif" font-size="12"
+        text-anchor="middle" font-weight="bold" fill="#283593">Prometheus  ·  Grafana  ·  Loki  ·  Promtail</text>
+
+  <!-- Monitoring dashed connections -->
+  <line x1="260" y1="495" x2="350" y2="540" stroke="#7986cb" stroke-width="1" stroke-dasharray="3,3"/>
+  <line x1="580" y1="474" x2="530" y2="540" stroke="#7986cb" stroke-width="1" stroke-dasharray="3,3"/>
+
 </svg>
