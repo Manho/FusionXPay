@@ -13,12 +13,12 @@
   <a href="#quick-start">Quick Start</a> •
   <a href="#architecture">Architecture</a> •
   <a href="#api-reference">API</a> •
-  <a href="#documentation">Docs</a> •
-  <a href="#contributing">Contributing</a>
+  <a href="#observability">Observability</a> •
+  <a href="#documentation">Docs</a>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Java-17-orange?style=flat-square&logo=openjdk" alt="Java 17">
+  <img src="https://img.shields.io/badge/Java-21-orange?style=flat-square&logo=openjdk" alt="Java 21">
   <img src="https://img.shields.io/badge/Spring%20Boot-3.2-brightgreen?style=flat-square&logo=springboot" alt="Spring Boot 3.2">
   <img src="https://img.shields.io/badge/License-MIT-blue?style=flat-square" alt="MIT License">
   <img src="https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square" alt="PRs Welcome">
@@ -52,31 +52,32 @@
 <tr>
 <td width="50%">
 
-### 🔌 Multi-Provider Integration
-- **Stripe** - Cards, wallets, local payments
-- **PayPal** - OAuth 2.0, Orders API v2
+### Multi-Provider Integration
+- **Stripe** — Checkout sessions, webhook-driven status
+- **PayPal** — OAuth 2.0, Orders API v2, capture + webhooks
 - Extensible provider architecture
 
-### 💰 Complete Payment Lifecycle
-- Payment initiation & processing
+### Complete Payment Lifecycle
+- Payment initiation & checkout redirect
 - Webhook handling with signature verification
-- Full refund support
-- Idempotent operations
+- Full refund support (Stripe + PayPal)
+- Idempotent capture & status updates
 
 </td>
 <td width="50%">
 
-### 🏗️ Enterprise Architecture
+### Enterprise Architecture
 - Microservices with Spring Cloud
-- Event-driven with RabbitMQ
+- Event-driven with Apache Kafka
 - Service discovery with Eureka
-- Circuit breaker patterns
+- Redis token-bucket rate limiting
 
-### 🔒 Security & Compliance
-- HMAC signature validation
-- JWT authentication
-- Role-based access control
-- PCI-DSS ready architecture
+### Security & Compliance
+- Stripe webhook signature validation
+- PayPal webhook signature verification
+- JWT authentication for admin dashboard
+- API key authentication with merchant isolation
+- Role-based access control (RBAC)
 
 </td>
 </tr>
@@ -90,7 +91,7 @@
 
 | Requirement | Version |
 |-------------|---------|
-| Java | 17+ |
+| Java | 21+ |
 | Maven | 3.6+ |
 | Docker | 20.10+ |
 | Docker Compose | 2.0+ |
@@ -101,31 +102,30 @@
 git clone https://github.com/Manho/FusionXPay.git
 cd FusionXPay
 
-# Copy environment template
-cp .env.example .env
-
-# Edit .env with your payment provider credentials
-# STRIPE_API_KEY=sk_test_xxx
-# PAYPAL_CLIENT_ID=xxx
-# PAYPAL_CLIENT_SECRET=xxx
+# Copy environment template and fill in your provider credentials
+cp .env.always-on.example .env
 ```
 
-### 2. Start Infrastructure
+### 2. Start with Docker Compose
 
 ```bash
-# Start MySQL, Redis, RabbitMQ via Docker
-docker-compose up -d mysql redis rabbitmq
+# Start all services (infrastructure + application)
+docker compose -f docker-compose.always-on.yml --env-file .env up -d
+
+# Verify all services are healthy
+./scripts/check-always-on-health.sh
 ```
 
-### 3. Run Services
+### 3. Run Locally (Development)
 
 ```bash
-# Option A: Use the startup script
-./scripts/run-all.sh
+# Start infrastructure only
+docker compose up -d
 
-# Option B: Run with Maven
+# Build all services
 mvn clean install -DskipTests
-mvn spring-boot:run -pl services/eureka-server
+
+# Run services individually
 mvn spring-boot:run -pl services/api-gateway
 mvn spring-boot:run -pl services/order-service
 mvn spring-boot:run -pl services/payment-service
@@ -139,79 +139,57 @@ mvn spring-boot:run -pl services/admin-service
 # Check Eureka Dashboard
 open http://localhost:8761
 
-# Test API Gateway
+# Test API Gateway health
 curl http://localhost:8080/actuator/health
+
+# Run service chain verification
+./scripts/verify-service-chain.sh
 ```
 
 ---
 
 ## Architecture
 
-```
-                                    ┌──────────────────┐
-                                    │   API Gateway    │
-                                    │    (Port 8080)   │
-                                    └────────┬─────────┘
-                                             │
-                    ┌────────────────────────┼────────────────────────┐
-                    │                        │                        │
-                    ▼                        ▼                        ▼
-           ┌───────────────┐        ┌───────────────┐        ┌───────────────┐
-           │ Order Service │        │Payment Service│        │ Admin Service │
-           │  (Port 8082)  │        │  (Port 8081)  │        │  (Port 8084)  │
-           └───────┬───────┘        └───────┬───────┘        └───────────────┘
-                   │                        │
-                   │    ┌───────────────────┤
-                   │    │                   │
-                   ▼    ▼                   ▼
-           ┌───────────────┐        ┌───────────────┐
-           │   RabbitMQ    │        │    Redis      │
-           │  (Port 5672)  │        │  (Port 6379)  │
-           └───────────────┘        └───────────────┘
-                   │
-                   ▼
-           ┌───────────────┐        ┌───────────────┐
-           │ Notification  │        │    MySQL      │
-           │   Service     │        │  (Port 3306)  │
-           │  (Port 8083)  │        └───────────────┘
-           └───────────────┘
-```
+<p align="center">
+  <img src="docs/design/diagrams/architecture.svg" alt="FusionXPay Architecture" width="880">
+</p>
 
 ### Service Overview
 
 | Service | Port | Description |
 |---------|------|-------------|
-| **API Gateway** | 8080 | Request routing, rate limiting, authentication |
+| **API Gateway** | 8080 | Request routing, Redis rate limiting, API key authentication |
 | **Eureka Server** | 8761 | Service discovery and registration |
-| **Order Service** | 8082 | Order lifecycle management |
-| **Payment Service** | 8081 | Payment processing, provider integration |
-| **Notification Service** | 8083 | Async notification delivery |
-| **Admin Service** | 8084 | Merchant dashboard API |
+| **Order Service** | 8082 | Order lifecycle management, merchant isolation |
+| **Payment Service** | 8081 | Payment processing, provider integration, webhook handling |
+| **Notification Service** | 8083 | Async notification delivery via Kafka |
+| **Admin Service** | 8084 | Merchant dashboard API, JWT authentication |
 
 ---
 
 ## API Reference
 
+All API endpoints are versioned under `/api/v1`.
+
 ### Create Order
 
 ```bash
-POST /api/orders
+POST /api/v1/orders
+X-API-Key: your-api-key
 Content-Type: application/json
 
 {
   "amount": 99.99,
   "currency": "USD",
-  "description": "Premium Subscription",
-  "metadata": {
-    "customer_id": "cust_123"
-  }
+  "description": "Premium Subscription"
 }
 ```
 
 ### Initiate Payment
 
 ```bash
-POST /api/payment/request
+POST /api/v1/payment/request
+X-API-Key: your-api-key
 Content-Type: application/json
 
 {
@@ -225,7 +203,8 @@ Content-Type: application/json
 ### Process Refund
 
 ```bash
-POST /api/payment/refund
+POST /api/v1/payment/refund
+X-API-Key: your-api-key
 Content-Type: application/json
 
 {
@@ -235,7 +214,104 @@ Content-Type: application/json
 }
 ```
 
-> 📖 For complete API documentation, see [API Reference](./docs/api/README.md)
+> For complete API documentation, see [API Reference](./docs/api/README.md)
+
+---
+
+## Testing
+
+### Unit & Integration Tests
+
+```bash
+# Run all unit tests
+mvn test
+
+# Run specific service tests
+mvn test -pl services/payment-service
+
+# Run integration tests (requires Docker)
+mvn verify -pl services/api-gateway
+```
+
+Integration tests use [Testcontainers](https://testcontainers.com/) with MySQL, Redis, and Kafka containers, plus [WireMock](https://wiremock.org/) for provider API simulation.
+
+### E2E Payment Flow
+
+```bash
+# Full payment + refund E2E test (requires running services + provider sandbox keys)
+./scripts/e2e-payment-refund.sh stripe
+./scripts/e2e-payment-refund.sh paypal
+```
+
+### Performance Tests
+
+```bash
+# Run k6 performance baseline (requires k6 installed)
+k6 run tests/performance/login.js
+k6 run tests/performance/order-list.js
+k6 run tests/performance/payment-request.js
+```
+
+### Service Chain Verification
+
+```bash
+# Verify cross-service communication (Kafka, Eureka, API routing)
+./scripts/verify-service-chain.sh
+```
+
+---
+
+## Observability
+
+FusionXPay includes a built-in observability stack:
+
+| Component | Port | Purpose |
+|-----------|------|---------|
+| **Prometheus** | 9090 | Metrics collection |
+| **Grafana** | 3000 | Dashboards & alerting |
+| **Loki** | 3100 | Log aggregation |
+| **Promtail** | — | Log shipping |
+
+### Pre-built Grafana Dashboards
+
+- **Overview** — Service health, request rates, error rates
+- **JVM** — Heap usage, GC metrics, thread pools
+- **HTTP API** — Latency percentiles, throughput, status codes
+- **Infrastructure** — Docker resource usage
+- **Logs** — Centralized log search via Loki
+
+```bash
+# Start monitoring stack
+docker compose -f docker-compose.monitoring.yml up -d
+
+# Access Grafana
+open http://localhost:3000  # admin / admin
+```
+
+---
+
+## Deployment
+
+### Docker Production Deployment
+
+```bash
+# Build all service images
+docker compose -f docker-compose.prod.yml build
+
+# Deploy with always-on profile (includes resource limits and health checks)
+docker compose -f docker-compose.always-on.yml --env-file .env up -d
+```
+
+### CI/CD
+
+GitHub Actions workflows are included:
+
+| Workflow | Trigger | Description |
+|----------|---------|-------------|
+| `backend-ci.yml` | PR | Fast unit tests |
+| `backend-ci-full.yml` | Main / Nightly | Full unit + integration tests |
+| `docker-build.yml` | Release tag | Build & push images to GHCR |
+| `deploy-local-main.yml` | Main merge | Auto-deploy to self-hosted runner with rollback |
 
 ---
 
@@ -244,20 +320,29 @@ Content-Type: application/json
 ```
 FusionXPay/
 ├── services/
-│   ├── api-gateway/          # Spring Cloud Gateway
+│   ├── api-gateway/          # Spring Cloud Gateway + Rate Limiting
 │   ├── eureka-server/        # Service Discovery
-│   ├── order-service/        # Order Management
-│   ├── payment-service/      # Payment Processing
-│   ├── notification-service/ # Notifications
-│   └── admin-service/        # Admin Dashboard API
+│   ├── order-service/        # Order Management + Merchant Isolation
+│   ├── payment-service/      # Payment Processing + Webhook Handling
+│   ├── notification-service/ # Kafka-driven Notifications
+│   └── admin-service/        # Admin Dashboard API + JWT Auth
 ├── common/                   # Shared DTOs & Utils
 ├── mysql-init/               # Database Initialization
-├── scripts/                  # Utility Scripts
+├── scripts/                  # Deploy, Verify, E2E, Backup Scripts
+├── tests/
+│   └── performance/          # k6 Performance Test Scripts
+├── monitoring/               # Prometheus, Grafana, Loki Config
 ├── docs/
 │   ├── design/              # Architecture Docs
 │   ├── api/                 # API Documentation
-│   └── requirements/        # Requirements Spec
-└── docker-compose.yml       # Local Development
+│   ├── testing/             # Test Reports & Strategy
+│   ├── operations/          # Runbooks & Checklists
+│   └── requirements/        # Product Requirements
+├── .github/workflows/       # CI/CD Pipelines
+├── docker-compose.yml           # Local development
+├── docker-compose.prod.yml      # Production build
+├── docker-compose.always-on.yml # Always-on deployment
+└── docker-compose.monitoring.yml # Observability stack
 ```
 
 ---
@@ -268,7 +353,7 @@ FusionXPay/
 <tr>
 <td align="center" width="96">
   <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/java/java-original.svg" width="48" height="48" alt="Java" />
-  <br>Java 17
+  <br>Java 21
 </td>
 <td align="center" width="96">
   <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/spring/spring-original.svg" width="48" height="48" alt="Spring" />
@@ -286,16 +371,32 @@ FusionXPay/
   <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/docker/docker-original.svg" width="48" height="48" alt="Docker" />
   <br>Docker
 </td>
+<td align="center" width="96">
+  <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/apachekafka/apachekafka-original.svg" width="48" height="48" alt="Kafka" />
+  <br>Kafka
+</td>
 </tr>
 </table>
 
-**Core Technologies:**
+**Core:**
 - **Framework:** Spring Boot 3.2, Spring Cloud 2023
 - **Database:** MySQL 8.0, Redis 7
-- **Messaging:** RabbitMQ
-- **Security:** Spring Security, JWT
-- **Build:** Maven
-- **Container:** Docker, Docker Compose
+- **Messaging:** Apache Kafka
+- **Security:** Spring Security, JWT, API Key Authentication
+- **Rate Limiting:** Spring Cloud Gateway + Redis Token Bucket
+- **Build:** Maven, Docker, GitHub Actions
+
+**Observability:**
+- **Metrics:** Prometheus, Micrometer
+- **Dashboards:** Grafana (5 pre-built dashboards)
+- **Logging:** Loki + Promtail
+- **Alerting:** Prometheus alert rules
+
+**Testing:**
+- **Unit:** JUnit 5, Mockito
+- **Integration:** Testcontainers, WireMock
+- **Performance:** k6
+- **E2E:** Shell-based payment flow scripts
 
 ---
 
@@ -305,45 +406,12 @@ FusionXPay/
 |----------|-------------|
 | [Architecture Design](./docs/design/architecture.md) | System architecture and design decisions |
 | [Process Flow](./docs/design/process-flow.md) | Payment flow diagrams |
-| [Requirements](./docs/requirements/requirements.md) | Functional requirements |
+| [Requirements](./docs/requirements/requirements.md) | Product requirements specification |
 | [API Reference](./docs/api/README.md) | API endpoints documentation |
-
----
-
-## Development
-
-### Running Tests
-
-```bash
-# Run all tests
-mvn test
-
-# Run specific service tests
-mvn test -pl services/payment-service
-
-# Run with coverage report
-mvn test jacoco:report
-```
-
-### Code Quality
-
-```bash
-# Check code style
-mvn checkstyle:check
-
-# Run static analysis
-mvn spotbugs:check
-```
-
----
-
-## Roadmap
-
-- [x] **Phase 1:** Core Payment Integration (Stripe, PayPal)
-- [x] **Phase 2:** Admin Dashboard MVP
-- [ ] **Phase 3:** Analytics & Reporting
-- [ ] **Phase 4:** Additional Payment Providers (Alipay, WeChat Pay)
-- [ ] **Phase 5:** Subscription & Recurring Payments
+| [Testing Strategy](./docs/testing/testing-strategy.md) | Test layering and coverage approach |
+| [Performance Report](./docs/testing/performance-baseline-report.md) | k6 performance baseline results |
+| [Reliability Report](./docs/testing/reliability-test-report.md) | Service recovery and resilience tests |
+| [Operations Runbook](./docs/operations/local-observability-backup.md) | Deployment and monitoring guide |
 
 ---
 
@@ -353,7 +421,7 @@ We welcome contributions! Please see our [Contributing Guide](./CONTRIBUTING.md)
 
 1. Fork the repository
 2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
+3. Commit your changes (`git commit -m 'feat: add amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
