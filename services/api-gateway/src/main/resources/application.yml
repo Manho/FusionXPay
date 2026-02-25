@@ -28,6 +28,10 @@ spring:
         locator:
           enabled: true
           lower-case-service-id: true
+      default-filters:
+        # Admin service and gateway both emit CORS headers; dedupe to avoid
+        # browser rejection when a header appears as comma-joined duplicates.
+        - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials Access-Control-Allow-Headers Access-Control-Allow-Methods, RETAIN_FIRST
       globalcors:
         add-to-simple-url-handler-mapping: true
         cors-configurations:
@@ -36,6 +40,8 @@ spring:
               - "http://localhost:3000"
               - "http://localhost:3001"
               - "https://*.vercel.app"
+              - "https://fusionx.fun"
+              - "https://www.fusionx.fun"
               - "https://*.trycloudflare.com"
             allowedMethods:
               - GET
