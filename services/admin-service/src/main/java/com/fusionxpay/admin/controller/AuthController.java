@@ -3,6 +3,7 @@ package com.fusionxpay.admin.controller;
 import com.fusionxpay.admin.dto.LoginRequest;
 import com.fusionxpay.admin.dto.LoginResponse;
 import com.fusionxpay.admin.dto.MerchantInfo;
+import com.fusionxpay.admin.dto.RegisterRequest;
 import com.fusionxpay.admin.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -46,12 +47,9 @@ public class AuthController {
         return ResponseEntity.ok(merchantInfo);
     }
 
-    /**
-     * Merchant registration (Temporary for development)
-     */
     @PostMapping("/register")
-    @Operation(summary = "Merchant register", description = "Register new merchant")
-    public ResponseEntity<LoginResponse> register(@Valid @RequestBody com.fusionxpay.admin.dto.RegisterRequest request) {
+    @Operation(summary = "Merchant register", description = "Register new merchant and issue initial API key")
+    public ResponseEntity<LoginResponse> register(@Valid @RequestBody RegisterRequest request) {
         return ResponseEntity.ok(authService.register(request));
     }
 }

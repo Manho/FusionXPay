@@ -178,6 +178,10 @@ management:
         include: health,info,prometheus,configprops,env
 
 app:
+  api-key:
+    cache-prefix: ${API_KEY_CACHE_PREFIX:gateway:api-key:}
+    cache-ttl-seconds: ${API_KEY_CACHE_TTL_SECONDS:300}
+    legacy-fallback-enabled: ${API_KEY_LEGACY_FALLBACK_ENABLED:true}
   rate-limit:
     login:
       replenish-rate: ${RATE_LIMIT_LOGIN_REPLENISH_RATE:1}

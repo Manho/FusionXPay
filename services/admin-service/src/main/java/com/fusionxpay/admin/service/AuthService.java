@@ -3,7 +3,10 @@ package com.fusionxpay.admin.service;
 import com.fusionxpay.admin.dto.LoginRequest;
 import com.fusionxpay.admin.dto.LoginResponse;
 import com.fusionxpay.admin.dto.MerchantInfo;
+import com.fusionxpay.admin.dto.RegisterRequest;
+import com.fusionxpay.admin.exception.ConflictException;
 import com.fusionxpay.admin.model.Merchant;
+import com.fusionxpay.admin.model.MerchantRole;
 import com.fusionxpay.admin.model.MerchantStatus;
 import com.fusionxpay.admin.repository.MerchantRepository;
 import com.fusionxpay.admin.security.JwtTokenProvider;
@@ -14,8 +17,11 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+
+import java.util.Locale;
+import java.util.UUID;
 
 /**
  * Authentication Service - handles login and token generation
@@ -28,6 +34,8 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
     private final MerchantRepository merchantRepository;
     private final JwtTokenProvider jwtTokenProvider;
+    private final PasswordEncoder passwordEncoder;
+    private final ApiKeyService apiKeyService;
 
     /**
      * Authenticate merchant and generate JWT token
@@ -85,28 +93,30 @@ public class AuthService {
     /**
      * Register a new merchant
      */
-    public LoginResponse register(com.fusionxpay.admin.dto.RegisterRequest request) {
-        if (merchantRepository.findByEmail(request.getEmail()).isPresent()) {
-            throw new RuntimeException("Email already exists");
+    public LoginResponse register(RegisterRequest request) {
+        if (merchantRepository.existsByEmail(request.getEmail())) {
+            throw new ConflictException("Email already exists");
         }
 
-        if (merchantRepository.findByMerchantCode(request.getMerchantCode()).isPresent()) {
-            throw new RuntimeException("Merchant code already exists");
+        String merchantCode = request.getMerchantCode();
+        if (merchantCode == null || merchantCode.isBlank()) {
+            merchantCode = generateMerchantCode();
+        } else if (merchantRepository.existsByMerchantCode(merchantCode)) {
+            throw new ConflictException("Merchant code already exists");
         }
 
-        // Create new merchant
         Merchant merchant = Merchant.builder()
                 .merchantName(request.getMerchantName())
                 .email(request.getEmail())
-                .merchantCode(request.getMerchantCode())
-                .passwordHash(new BCryptPasswordEncoder().encode(request.getPassword()))
-                .role(com.fusionxpay.admin.model.MerchantRole.MERCHANT)
+                .merchantCode(merchantCode)
+                .passwordHash(passwordEncoder.encode(request.getPassword()))
+                .role(MerchantRole.MERCHANT)
                 .status(MerchantStatus.ACTIVE)
                 .build();
 
         merchant = merchantRepository.save(merchant);
+        String initialApiKey = apiKeyService.createInitialApiKey(merchant.getId(), merchant.getId(), null, null);
 
-        // Generate token
         String token = jwtTokenProvider.generateToken(
                 merchant.getId(),
                 merchant.getEmail(),
@@ -116,7 +126,21 @@ public class AuthService {
         return LoginResponse.of(
                 token,
                 jwtTokenProvider.getExpirationInSeconds(),
-                MerchantInfo.fromEntity(merchant)
+                MerchantInfo.fromEntity(merchant),
+                initialApiKey
         );
+    }
+
+    private String generateMerchantCode() {
+        for (int attempt = 0; attempt < 5; attempt++) {
+            String candidate = "MCH" + UUID.randomUUID().toString()
+                    .replace("-", "")
+                    .substring(0, 8)
+                    .toUpperCase(Locale.ROOT);
+            if (!merchantRepository.existsByMerchantCode(candidate)) {
+                return candidate;
+            }
+        }
+        throw new IllegalStateException("Failed to generate unique merchant code");
     }
 }

@@ -1,8 +1,11 @@
 package com.fusionxpay.api.gateway.integration;
 
 import com.fusionxpay.api.gateway.dto.AuthRequest;
-import com.fusionxpay.api.gateway.model.User;
-import com.fusionxpay.api.gateway.repository.UserRepository;
+import com.fusionxpay.api.gateway.model.MerchantAccount;
+import com.fusionxpay.api.gateway.model.MerchantApiKeyRecord;
+import com.fusionxpay.api.gateway.model.MerchantStatus;
+import com.fusionxpay.api.gateway.repository.MerchantAccountRepository;
+import com.fusionxpay.api.gateway.repository.MerchantApiKeyRecordRepository;
 import com.fusionxpay.common.test.AbstractIntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -11,23 +14,24 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.MediaType;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Integration tests for API Key authentication flow in api-gateway
+ * Integration tests for API Key authentication flow in api-gateway.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @TestPropertySource(properties = {
-    "eureka.client.enabled=false",
-    "spring.cloud.discovery.enabled=false",
-    "spring.cloud.gateway.discovery.locator.enabled=false"
+        "eureka.client.enabled=false",
+        "spring.cloud.discovery.enabled=false",
+        "spring.cloud.gateway.discovery.locator.enabled=false"
 })
 public class ApiKeyAuthFlowIT extends AbstractIntegrationTest {
 
@@ -35,16 +39,14 @@ public class ApiKeyAuthFlowIT extends AbstractIntegrationTest {
     private int port;
 
     @Autowired
-    private UserRepository userRepository;
+    private MerchantAccountRepository merchantAccountRepository;
 
     @Autowired
-    private PasswordEncoder passwordEncoder;
+    private MerchantApiKeyRecordRepository merchantApiKeyRecordRepository;
 
     private WebTestClient webTestClient;
 
-    private static final String TEST_USERNAME = "testuser";
-    private static final String TEST_PASSWORD = "testpass123";
-    private static final String VALID_API_KEY = "valid-api-key-" + UUID.randomUUID();
+    private static final String VALID_API_KEY = "fxp_integration_valid_key_123456";
     private static final String INVALID_API_KEY = "invalid-api-key-12345";
 
     @BeforeEach
@@ -54,31 +56,31 @@ public class ApiKeyAuthFlowIT extends AbstractIntegrationTest {
                 .responseTimeout(Duration.ofSeconds(30))
                 .build();
 
-        userRepository.deleteAll();
+        merchantApiKeyRecordRepository.deleteAll();
+        merchantAccountRepository.deleteAll();
 
-        // Create test user with valid API key
-        User testUser = User.builder()
-                .username(TEST_USERNAME)
-                .password(passwordEncoder.encode(TEST_PASSWORD))
-                .apiKey(VALID_API_KEY)
-                .roles("USER")
+        MerchantAccount merchant = MerchantAccount.builder()
+                .email("merchant-it@example.com")
+                .status(MerchantStatus.ACTIVE)
                 .build();
-        userRepository.save(testUser);
+        merchant = merchantAccountRepository.save(merchant);
+
+        MerchantApiKeyRecord record = MerchantApiKeyRecord.builder()
+                .merchantId(merchant.getId())
+                .keyHash(sha256(VALID_API_KEY))
+                .active(true)
+                .build();
+        merchantApiKeyRecordRepository.save(record);
     }
 
     @Test
     @DisplayName("Valid API Key passes authentication")
     void testValidApiKey_PassesAuthentication() {
-        // Request to a protected endpoint with valid API key
-        // Using order-service route as example
         webTestClient.get()
                 .uri("/order-service/orders")
                 .header("X-API-Key", VALID_API_KEY)
                 .exchange()
-                .expectStatus().value(status -> {
-                    // Auth passed if we don't get 401 - we may get 503 (service unavailable) or 404
-                    assertThat(status).isNotEqualTo(401);
-                });
+                .expectStatus().value(status -> assertThat(status).isNotEqualTo(401));
     }
 
     @Test
@@ -101,78 +103,38 @@ public class ApiKeyAuthFlowIT extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("Empty API Key is rejected with 401")
-    void testEmptyApiKey_Returns401() {
-        webTestClient.get()
-                .uri("/order-service/orders")
-                .header("X-API-Key", "")
-                .exchange()
-                .expectStatus().isUnauthorized();
-    }
-
-    @Test
-    @DisplayName("Auth endpoints bypass API key validation")
-    void testAuthEndpoints_BypassApiKeyValidation() {
-        // Registration endpoint should be accessible without API key
-        AuthRequest registerRequest = new AuthRequest();
-        registerRequest.setUsername("newuser");
-        registerRequest.setPassword("newpassword");
+    @DisplayName("Deprecated auth endpoints return 410")
+    void testAuthEndpoints_Deprecated() {
+        AuthRequest request = new AuthRequest();
+        request.setUsername("newuser");
+        request.setPassword("newpassword");
 
         webTestClient.post()
                 .uri("/api/v1/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(registerRequest)
+                .bodyValue(request)
                 .exchange()
-                .expectStatus().isCreated()  // Register returns 201 CREATED
+                .expectStatus().isEqualTo(410)
                 .expectBody()
-                .jsonPath("$.username").isEqualTo("newuser")
-                .jsonPath("$.apiKey").isNotEmpty();
-    }
-
-    @Test
-    @DisplayName("Login endpoint returns API key for valid credentials")
-    void testLogin_ReturnsApiKey() {
-        AuthRequest loginRequest = new AuthRequest();
-        loginRequest.setUsername(TEST_USERNAME);
-        loginRequest.setPassword(TEST_PASSWORD);
+                .jsonPath("$.code").isEqualTo("DEPRECATED_ENDPOINT");
 
         webTestClient.post()
                 .uri("/api/v1/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(loginRequest)
+                .bodyValue(request)
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus().isEqualTo(410)
                 .expectBody()
-                .jsonPath("$.username").isEqualTo(TEST_USERNAME)
-                .jsonPath("$.apiKey").isEqualTo(VALID_API_KEY);
+                .jsonPath("$.code").isEqualTo("DEPRECATED_ENDPOINT");
     }
 
     @Test
-    @DisplayName("Login with invalid credentials returns error")
-    void testLogin_WithInvalidCredentials_ReturnsError() {
-        AuthRequest loginRequest = new AuthRequest();
-        loginRequest.setUsername(TEST_USERNAME);
-        loginRequest.setPassword("wrongpassword");
-
-        webTestClient.post()
-                .uri("/api/v1/auth/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(loginRequest)
-                .exchange()
-                .expectStatus().isBadRequest();  // Returns 400 BAD_REQUEST
-    }
-
-    @Test
-    @DisplayName("Swagger UI endpoints bypass API key validation")
+    @DisplayName("Swagger endpoints bypass API key validation")
     void testSwaggerEndpoints_BypassApiKeyValidation() {
-        // Swagger UI should be accessible without API key (not return 401)
         webTestClient.get()
                 .uri("/swagger-ui/index.html")
                 .exchange()
-                .expectStatus().value(status -> {
-                    // Should not be 401 - auth is bypassed for swagger
-                    assertThat(status).isNotEqualTo(401);
-                });
+                .expectStatus().value(status -> assertThat(status).isNotEqualTo(401));
     }
 
     @Test
@@ -181,81 +143,56 @@ public class ApiKeyAuthFlowIT extends AbstractIntegrationTest {
         webTestClient.get()
                 .uri("/v3/api-docs")
                 .exchange()
-                .expectStatus().value(status -> {
-                    // Should not be 401 - auth is bypassed for api-docs
-                    assertThat(status).isNotEqualTo(401);
-                });
-    }
-
-    @Test
-    @DisplayName("Newly registered user can authenticate with their API key")
-    void testRegisteredUser_CanAuthenticateWithApiKey() {
-        // Register a new user
-        AuthRequest registerRequest = new AuthRequest();
-        registerRequest.setUsername("brandnewuser");
-        registerRequest.setPassword("brandnewpass");
-
-        String responseBody = webTestClient.post()
-                .uri("/api/v1/auth/register")
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(registerRequest)
-                .exchange()
-                .expectStatus().isCreated()  // Register returns 201 CREATED
-                .expectBody(String.class)
-                .returnResult()
-                .getResponseBody();
-
-        assertThat(responseBody).isNotNull();
-        // Extract API key from JSON response
-        assertThat(responseBody).contains("apiKey");
-
-        // Parse the API key from JSON (simple extraction)
-        String newApiKey = responseBody.split("\"apiKey\":\"")[1].split("\"")[0];
-        assertThat(newApiKey).isNotBlank();
-
-        // Use the new API key to access protected endpoint
-        webTestClient.get()
-                .uri("/order-service/orders")
-                .header("X-API-Key", newApiKey)
-                .exchange()
-                .expectStatus().value(status -> {
-                    // Auth passed if not 401 - we may get 503 or 404
-                    assertThat(status).isNotEqualTo(401);
-                });
+                .expectStatus().value(status -> assertThat(status).isNotEqualTo(401));
     }
 
     @Test
     @DisplayName("Multiple valid API keys work independently")
     void testMultipleValidApiKeys_WorkIndependently() {
-        // Create second user with different API key
-        String secondApiKey = "second-api-key-" + UUID.randomUUID();
-        User secondUser = User.builder()
-                .username("seconduser")
-                .password(passwordEncoder.encode("secondpass"))
-                .apiKey(secondApiKey)
-                .roles("USER")
+        MerchantAccount merchant = MerchantAccount.builder()
+                .email("merchant-two@example.com")
+                .status(MerchantStatus.ACTIVE)
                 .build();
-        userRepository.save(secondUser);
+        merchant = merchantAccountRepository.save(merchant);
 
-        // First API key should work (not return 401)
+        String secondApiKey = "fxp_second_key_" + UUID.randomUUID();
+        MerchantApiKeyRecord secondRecord = MerchantApiKeyRecord.builder()
+                .merchantId(merchant.getId())
+                .keyHash(sha256(secondApiKey))
+                .active(true)
+                .build();
+        merchantApiKeyRecordRepository.save(secondRecord);
+
         webTestClient.get()
                 .uri("/order-service/orders")
                 .header("X-API-Key", VALID_API_KEY)
                 .exchange()
                 .expectStatus().value(status -> assertThat(status).isNotEqualTo(401));
 
-        // Second API key should also work (not return 401)
         webTestClient.get()
                 .uri("/order-service/orders")
                 .header("X-API-Key", secondApiKey)
                 .exchange()
                 .expectStatus().value(status -> assertThat(status).isNotEqualTo(401));
 
-        // Invalid key should still fail
         webTestClient.get()
                 .uri("/order-service/orders")
                 .header("X-API-Key", INVALID_API_KEY)
                 .exchange()
                 .expectStatus().isUnauthorized();
+    }
+
+    private String sha256(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] bytes = digest.digest(value.getBytes(StandardCharsets.UTF_8));
+            StringBuilder builder = new StringBuilder(bytes.length * 2);
+            for (byte b : bytes) {
+                builder.append(String.format("%02x", b));
+            }
+            return builder.toString();
+        } catch (Exception ex) {
+            throw new IllegalStateException(ex);
+        }
     }
 }

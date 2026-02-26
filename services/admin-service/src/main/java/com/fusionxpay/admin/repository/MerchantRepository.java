@@ -3,6 +3,7 @@ package com.fusionxpay.admin.repository;
 import com.fusionxpay.admin.model.Merchant;
 import com.fusionxpay.admin.model.MerchantStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
@@ -11,7 +12,7 @@ import java.util.Optional;
  * Repository for Merchant entity
  */
 @Repository
-public interface MerchantRepository extends JpaRepository<Merchant, Long> {
+public interface MerchantRepository extends JpaRepository<Merchant, Long>, JpaSpecificationExecutor<Merchant> {
 
     /**
      * Find merchant by email

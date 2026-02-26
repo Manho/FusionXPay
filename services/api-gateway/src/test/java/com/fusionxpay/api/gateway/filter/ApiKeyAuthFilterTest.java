@@ -1,7 +1,10 @@
 package com.fusionxpay.api.gateway.filter;
 
-import com.fusionxpay.api.gateway.model.User;
-import com.fusionxpay.api.gateway.repository.UserRepository;
+import com.fusionxpay.api.gateway.model.MerchantAccount;
+import com.fusionxpay.api.gateway.model.MerchantApiKeyRecord;
+import com.fusionxpay.api.gateway.model.MerchantStatus;
+import com.fusionxpay.api.gateway.repository.MerchantAccountRepository;
+import com.fusionxpay.api.gateway.repository.MerchantApiKeyRecordRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -11,11 +14,13 @@ import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
 import org.springframework.mock.web.server.MockServerWebExchange;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
-import java.util.UUID;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -27,18 +32,22 @@ class ApiKeyAuthFilterTest {
     private ApiKeyAuthFilter apiKeyAuthFilter;
 
     @Autowired
-    private UserRepository userRepository;
+    private MerchantAccountRepository merchantAccountRepository;
 
     @Autowired
-    private PasswordEncoder passwordEncoder;
+    private MerchantApiKeyRecordRepository merchantApiKeyRecordRepository;
 
-    private String cleanupUsername;
+    private final List<Long> cleanupMerchants = new ArrayList<>();
 
     @AfterEach
     void tearDown() {
-        if (cleanupUsername != null) {
-            userRepository.findByUsername(cleanupUsername).ifPresent(userRepository::delete);
-        }
+        cleanupMerchants.forEach(merchantId -> {
+            merchantApiKeyRecordRepository.findAll().stream()
+                    .filter(key -> key.getMerchantId().equals(merchantId))
+                    .forEach(merchantApiKeyRecordRepository::delete);
+            merchantAccountRepository.findById(merchantId).ifPresent(merchantAccountRepository::delete);
+        });
+        cleanupMerchants.clear();
     }
 
     @Test
@@ -99,16 +108,21 @@ class ApiKeyAuthFilterTest {
     @Test
     @DisplayName("Valid API key allows access to protected endpoints")
     void validApiKeyAllowsAccess() {
-        String apiKey = UUID.randomUUID().toString();
-        cleanupUsername = "user-" + UUID.randomUUID();
+        String apiKey = "fxp_test_valid_key_123456";
 
-        User user = User.builder()
-                .username(cleanupUsername)
-                .password(passwordEncoder.encode("testpassword"))
-                .apiKey(apiKey)
-                .roles("USER")
+        MerchantAccount merchant = MerchantAccount.builder()
+                .email("merchant-valid@example.com")
+                .status(MerchantStatus.ACTIVE)
                 .build();
-        userRepository.save(user);
+        merchant = merchantAccountRepository.save(merchant);
+        cleanupMerchants.add(merchant.getId());
+
+        MerchantApiKeyRecord apiKeyRecord = MerchantApiKeyRecord.builder()
+                .merchantId(merchant.getId())
+                .keyHash(sha256(apiKey))
+                .active(true)
+                .build();
+        merchantApiKeyRecordRepository.save(apiKeyRecord);
 
         TrackingFilterChain chain = new TrackingFilterChain();
         ServerWebExchange exchange = MockServerWebExchange.from(
@@ -133,6 +147,20 @@ class ApiKeyAuthFilterTest {
         apiKeyAuthFilter.filter(exchange, chain).block();
 
         assertEquals(HttpStatus.UNAUTHORIZED, exchange.getResponse().getStatusCode());
+    }
+
+    private String sha256(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] bytes = digest.digest(value.getBytes(StandardCharsets.UTF_8));
+            StringBuilder builder = new StringBuilder(bytes.length * 2);
+            for (byte b : bytes) {
+                builder.append(String.format("%02x", b));
+            }
+            return builder.toString();
+        } catch (Exception ex) {
+            throw new IllegalStateException(ex);
+        }
     }
 
     private static class TrackingFilterChain implements GatewayFilterChain {

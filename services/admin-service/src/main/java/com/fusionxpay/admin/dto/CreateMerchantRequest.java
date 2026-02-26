@@ -1,12 +1,14 @@
 package com.fusionxpay.admin.dto;
 
+import com.fusionxpay.admin.model.MerchantRole;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 @Data
-public class RegisterRequest {
+public class CreateMerchantRequest {
+
     @NotBlank
     @Size(max = 100)
     private String merchantName;
@@ -22,4 +24,6 @@ public class RegisterRequest {
 
     @Size(max = 32)
     private String merchantCode;
+
+    private MerchantRole role;
 }
