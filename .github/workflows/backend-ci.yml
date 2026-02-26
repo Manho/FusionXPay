@@ -77,6 +77,15 @@ jobs:
           SPRING_REDIS_HOST: localhost
           SPRING_REDIS_PORT: 6379
 
+      - name: Run API gateway critical integration tests
+        run: mvn verify -B -pl services/api-gateway -am -Dit.test=ApiKeyAuthFlowIT,RateLimitingIntegrationIT -Dfailsafe.failIfNoSpecifiedTests=false -DskipTests
+        env:
+          SPRING_DATASOURCE_URL: jdbc:mysql://localhost:3306/fusionxpay_test
+          SPRING_DATASOURCE_USERNAME: root
+          SPRING_DATASOURCE_PASSWORD: testpass
+          SPRING_REDIS_HOST: localhost
+          SPRING_REDIS_PORT: 6379
+
       - name: Upload test results
         uses: actions/upload-artifact@v4
         if: failure()
