@@ -1,7 +1,7 @@
 package com.fusionxpay.admin.config;
 
-import com.fusionxpay.admin.dto.MerchantInfo;
-import com.fusionxpay.common.dto.ApiResponse;
+import com.fusionxpay.admin.exception.ConflictException;
+import com.fusionxpay.admin.exception.ResourceNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -52,6 +52,33 @@ public class GlobalExceptionHandler {
         response.put("message", "Validation failed");
         response.put("code", "VALIDATION_ERROR");
         response.put("errors", errors);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+
+    @ExceptionHandler(ConflictException.class)
+    public ResponseEntity<Map<String, Object>> handleConflict(ConflictException ex) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", false);
+        response.put("message", ex.getMessage());
+        response.put("code", "CONFLICT");
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+    }
+
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleResourceNotFound(ResourceNotFoundException ex) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", false);
+        response.put("message", ex.getMessage());
+        response.put("code", "NOT_FOUND");
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<Map<String, Object>> handleIllegalArgument(IllegalArgumentException ex) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", false);
+        response.put("message", ex.getMessage());
+        response.put("code", "BAD_REQUEST");
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }
 

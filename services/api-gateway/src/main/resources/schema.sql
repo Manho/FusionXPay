@@ -8,3 +8,35 @@ CREATE TABLE IF NOT EXISTS users (
     PRIMARY KEY (id),
     UNIQUE KEY unique_username (username)
 )ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS merchant (
+    id BIGINT AUTO_INCREMENT,
+    merchant_code VARCHAR(32) NOT NULL UNIQUE,
+    merchant_name VARCHAR(100) NOT NULL,
+    email VARCHAR(100) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    role ENUM('ADMIN', 'MERCHANT') NOT NULL DEFAULT 'MERCHANT',
+    status ENUM('ACTIVE', 'DISABLED') NOT NULL DEFAULT 'ACTIVE',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS merchant_api_keys (
+    id BIGINT AUTO_INCREMENT,
+    merchant_id BIGINT NOT NULL,
+    key_prefix VARCHAR(32) NOT NULL,
+    key_hash VARCHAR(128) NOT NULL UNIQUE,
+    key_encrypted VARCHAR(512) NOT NULL,
+    last_four VARCHAR(4) NOT NULL,
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    created_by BIGINT NULL,
+    revoked_by BIGINT NULL,
+    revoked_at DATETIME NULL,
+    expires_at DATETIME NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_merchant_api_keys_merchant_id (merchant_id),
+    KEY idx_merchant_api_keys_active (is_active)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

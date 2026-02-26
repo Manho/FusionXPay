@@ -61,6 +61,10 @@ logging:
     org.springframework.web: INFO
     org.springframework.security: INFO
 
+app:
+  api-key:
+    encryption-secret: ${API_KEY_ENCRYPTION_SECRET:fusionxpay-api-key-encryption-secret-32-char}
+
 # OpenAPI
 springdoc:
   api-docs:
