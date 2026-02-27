@@ -13,9 +13,9 @@ compose() {
 is_transient_registry_error() {
   local log_file="$1"
   # Common transient network/registry issues observed on self-hosted runners.
-  rg -n -i \
+  grep -Eiq \
     'failed to copy:|httpReadSeeker: failed|unexpected EOF|(^|[^a-z])EOF([^a-z]|$)|tls handshake timeout|connection reset by peer|i/o timeout|temporary failure in name resolution|net/http: request canceled|503 Service Unavailable|429 Too Many Requests' \
-    "${log_file}" >/dev/null 2>&1
+    "${log_file}"
 }
 
 cleanup() {
@@ -119,12 +119,12 @@ while (( up_attempt <= up_max_attempts )); do
     break
   fi
 
-  if rg -n 'container name "/[^"]+" is already in use' "${DEPLOY_LOG_FILE}" >/dev/null 2>&1; then
+  if grep -Eq 'container name "/[^"]+" is already in use' "${DEPLOY_LOG_FILE}"; then
     echo "[WARN] Container name conflict detected. Removing conflicted containers and retrying..."
 
     mapfile -t conflicted_containers < <(
-      rg -n 'container name "/[^"]+" is already in use' "${DEPLOY_LOG_FILE}" \
-        | rg -o '"/[^"]+"' \
+      grep -Eo 'container name "/[^"]+" is already in use' "${DEPLOY_LOG_FILE}" \
+        | grep -Eo '"/[^"]+"' \
         | tr -d '"' \
         | sed 's#^/##' \
         | sort -u
