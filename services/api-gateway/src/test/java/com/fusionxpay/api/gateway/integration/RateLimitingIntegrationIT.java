@@ -1,7 +1,10 @@
 package com.fusionxpay.api.gateway.integration;
 
-import com.fusionxpay.api.gateway.model.User;
-import com.fusionxpay.api.gateway.repository.UserRepository;
+import com.fusionxpay.api.gateway.model.MerchantAccount;
+import com.fusionxpay.api.gateway.model.MerchantApiKeyRecord;
+import com.fusionxpay.api.gateway.model.MerchantStatus;
+import com.fusionxpay.api.gateway.repository.MerchantAccountRepository;
+import com.fusionxpay.api.gateway.repository.MerchantApiKeyRecordRepository;
 import com.fusionxpay.common.test.AbstractIntegrationTest;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import org.junit.jupiter.api.BeforeEach;
@@ -12,12 +15,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.MediaType;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.Map;
 import java.util.UUID;
@@ -74,10 +78,10 @@ class RateLimitingIntegrationIT extends AbstractIntegrationTest {
     private int port;
 
     @Autowired
-    private UserRepository userRepository;
+    private MerchantAccountRepository merchantAccountRepository;
 
     @Autowired
-    private PasswordEncoder passwordEncoder;
+    private MerchantApiKeyRecordRepository merchantApiKeyRecordRepository;
 
     private WebTestClient webTestClient;
 
@@ -95,7 +99,8 @@ class RateLimitingIntegrationIT extends AbstractIntegrationTest {
                 .responseTimeout(Duration.ofSeconds(30))
                 .build();
 
-        userRepository.deleteAll();
+        merchantApiKeyRecordRepository.deleteAll();
+        merchantAccountRepository.deleteAll();
     }
 
     @Test
@@ -127,7 +132,7 @@ class RateLimitingIntegrationIT extends AbstractIntegrationTest {
     @Test
     @DisplayName("Payment endpoint is rate limited by API key")
     void paymentEndpointIsRateLimitedByApiKey() {
-        String apiKey = createTestUserAndReturnApiKey();
+        String apiKey = createActiveMerchantAndApiKey();
         int burstCapacity = 3;
         int margin = 2;
 
@@ -153,7 +158,7 @@ class RateLimitingIntegrationIT extends AbstractIntegrationTest {
     @Test
     @DisplayName("Order endpoint is rate limited by API key with its own threshold")
     void orderEndpointUsesIndependentThreshold() {
-        String apiKey = createTestUserAndReturnApiKey();
+        String apiKey = createActiveMerchantAndApiKey();
         int burstCapacity = 4;
         int margin = 2;
 
@@ -172,18 +177,38 @@ class RateLimitingIntegrationIT extends AbstractIntegrationTest {
                 .expectHeader().valueEquals("Retry-After", "60");
     }
 
-    private String createTestUserAndReturnApiKey() {
+    private String createActiveMerchantAndApiKey() {
         String suffix = UUID.randomUUID().toString().substring(0, 8);
-        String username = "rate-limit-user-" + suffix;
-        String apiKey = "rate-limit-key-" + UUID.randomUUID();
+        String apiKey = "fxp_rate_limit_" + UUID.randomUUID();
+        String email = "rate-limit-" + suffix + "@example.com";
 
-        User user = User.builder()
-                .username(username)
-                .password(passwordEncoder.encode("test-password-123"))
-                .apiKey(apiKey)
-                .roles("USER")
+        MerchantAccount merchant = MerchantAccount.builder()
+                .email(email)
+                .status(MerchantStatus.ACTIVE)
                 .build();
-        userRepository.save(user);
+        merchant = merchantAccountRepository.save(merchant);
+
+        MerchantApiKeyRecord record = MerchantApiKeyRecord.builder()
+                .merchantId(merchant.getId())
+                .keyHash(sha256(apiKey))
+                .active(true)
+                .build();
+        merchantApiKeyRecordRepository.save(record);
+
         return apiKey;
+    }
+
+    private String sha256(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] bytes = digest.digest(value.getBytes(StandardCharsets.UTF_8));
+            StringBuilder builder = new StringBuilder(bytes.length * 2);
+            for (byte b : bytes) {
+                builder.append(String.format("%02x", b));
+            }
+            return builder.toString();
+        } catch (Exception ex) {
+            throw new IllegalStateException(ex);
+        }
     }
 }
