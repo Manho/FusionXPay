@@ -6,8 +6,8 @@
       <stop offset="100%" stop-color="#0F0F23"/>
     </linearGradient>
     <linearGradient id="accentGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#2D1EF5"/>
-      <stop offset="100%" stop-color="#7B6FFF"/>
+      <stop offset="0%" stop-color="#2563EB"/>
+      <stop offset="100%" stop-color="#60A5FA"/>
     </linearGradient>
     <linearGradient id="fGradient" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#FFFFFF"/>
@@ -23,7 +23,7 @@
   </defs>
 
   <rect x="14" y="14" width="92" height="92" rx="24" fill="url(#bgGradient)" stroke="url(#accentGradient)" stroke-width="2"/>
-  <rect x="22" y="22" width="76" height="76" rx="18" fill="none" stroke="#2D1EF5" stroke-width="0.5" opacity="0.3"/>
+  <rect x="22" y="22" width="76" height="76" rx="18" fill="none" stroke="#2563EB" stroke-width="0.5" opacity="0.3"/>
 
   <path d="M38 32 L78 32 L78 40 L48 40 L48 54 L70 54 L70 62 L48 62 L48 88 L38 88 Z" fill="url(#fGradient)"/>
 
@@ -32,8 +32,8 @@
     <path d="M84 64 L62 86" stroke="url(#accentGradient)" stroke-width="7" stroke-linecap="round"/>
   </g>
 
-  <circle cx="28" cy="60" r="3" fill="#2D1EF5" filter="url(#glow)"/>
-  <circle cx="92" cy="38" r="2.5" fill="#7B6FFF" opacity="0.8"/>
-  <circle cx="90" cy="50" r="1.5" fill="#2D1EF5" opacity="0.6"/>
-  <circle cx="75" cy="28" r="2" fill="#7B6FFF" opacity="0.5"/>
+  <circle cx="28" cy="60" r="3" fill="#2563EB" filter="url(#glow)"/>
+  <circle cx="92" cy="38" r="2.5" fill="#60A5FA" opacity="0.8"/>
+  <circle cx="90" cy="50" r="1.5" fill="#2563EB" opacity="0.6"/>
+  <circle cx="75" cy="28" r="2" fill="#60A5FA" opacity="0.5"/>
 </svg>
