@@ -1,7 +1,9 @@
 package com.fusionxpay.payment.service;
 
 import com.fusionxpay.common.model.PaymentStatus;
+import com.fusionxpay.payment.client.OrderServiceClient;
 import com.fusionxpay.payment.config.TestConfig;
+import com.fusionxpay.payment.dto.OrderResponse;
 import com.fusionxpay.payment.dto.PaymentRequest;
 import com.fusionxpay.payment.dto.PaymentResponse;
 import com.fusionxpay.payment.event.OrderEventProducer;
@@ -17,6 +19,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.ResponseEntity;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -41,6 +44,8 @@ import static org.mockito.Mockito.*;
 @Import(TestConfig.class)
 class PaymentServiceTest {
 
+    private static final long MERCHANT_ID = 11L;
+
     @Autowired
     private PaymentService paymentService;
 
@@ -52,6 +57,9 @@ class PaymentServiceTest {
 
     @MockBean
     private PaymentProviderFactory paymentProviderFactory;
+
+    @MockBean
+    private OrderServiceClient orderServiceClient;
 
     private PaymentProvider paymentProvider;
 
@@ -77,17 +85,21 @@ class PaymentServiceTest {
         paymentRequest.setPaymentChannel("STRIPE");
 
         when(paymentProviderFactory.getProvider("STRIPE")).thenReturn(paymentProvider);
+        when(orderServiceClient.getOrderById(MERCHANT_ID, orderId)).thenReturn(ResponseEntity.ok(
+                OrderResponse.builder().orderId(orderId).userId(MERCHANT_ID).build()
+        ));
 
-        PaymentResponse response = paymentService.initiatePayment(paymentRequest);
+        PaymentResponse response = paymentService.initiatePayment(MERCHANT_ID, paymentRequest);
 
         assertNotNull(response);
         assertEquals(orderId, response.getOrderId());
         assertEquals(PaymentStatus.PROCESSING, response.getStatus());
         assertNotNull(response.getTransactionId());
 
-        PaymentTransaction saved = paymentTransactionRepository.findByOrderId(orderId).orElseThrow();
+        PaymentTransaction saved = paymentTransactionRepository.findByOrderIdAndMerchantId(orderId, MERCHANT_ID).orElseThrow();
         assertEquals(PaymentStatus.PROCESSING.name(), saved.getStatus());
         assertNotNull(saved.getProviderTransactionId());
+        assertEquals(MERCHANT_ID, saved.getMerchantId());
 
         verify(orderEventProducer).sendPaymentStatusUpdate(eq(orderId), any(UUID.class), eq(PaymentStatus.PROCESSING));
     }
@@ -98,6 +110,7 @@ class PaymentServiceTest {
         UUID orderId = UUID.randomUUID();
         PaymentTransaction transaction = new PaymentTransaction();
         transaction.setOrderId(orderId);
+        transaction.setMerchantId(MERCHANT_ID);
         transaction.setAmount(new BigDecimal("50.00"));
         transaction.setCurrency("USD");
         transaction.setPaymentChannel("STRIPE");
@@ -112,7 +125,10 @@ class PaymentServiceTest {
         request.setCurrency("USD");
         request.setPaymentChannel("STRIPE");
 
-        PaymentResponse response = paymentService.initiatePayment(request);
+        when(orderServiceClient.getOrderById(MERCHANT_ID, orderId)).thenReturn(ResponseEntity.ok(
+                OrderResponse.builder().orderId(orderId).userId(MERCHANT_ID).build()
+        ));
+        PaymentResponse response = paymentService.initiatePayment(MERCHANT_ID, request);
 
         assertNotNull(response);
         assertEquals(orderId, response.getOrderId());
@@ -128,6 +144,7 @@ class PaymentServiceTest {
         UUID orderId = UUID.randomUUID();
         PaymentTransaction transaction = new PaymentTransaction();
         transaction.setOrderId(orderId);
+        transaction.setMerchantId(MERCHANT_ID);
         transaction.setAmount(new BigDecimal("75.00"));
         transaction.setCurrency("USD");
         transaction.setPaymentChannel("STRIPE");

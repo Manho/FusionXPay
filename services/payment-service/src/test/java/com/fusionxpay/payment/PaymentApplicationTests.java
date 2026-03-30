@@ -34,6 +34,8 @@ import static org.junit.jupiter.api.Assertions.*;
 @Import(TestConfig.class)
 class PaymentApplicationTests {
 
+    private static final long MERCHANT_ID = 5L;
+
     @Autowired
     private PaymentController paymentController;
 
@@ -87,7 +89,7 @@ class PaymentApplicationTests {
         paymentTransactionRepository.deleteAll();
 
         // When
-        PaymentResponse response = paymentService.getPaymentTransactionByOrderId(orderId);
+        PaymentResponse response = paymentService.getPaymentTransactionByOrderId(MERCHANT_ID, orderId);
 
         // Then
         assertNotNull(response);
@@ -101,6 +103,7 @@ class PaymentApplicationTests {
         UUID orderId = UUID.randomUUID();
         PaymentTransaction transaction = new PaymentTransaction();
         transaction.setOrderId(orderId);
+        transaction.setMerchantId(MERCHANT_ID);
         transaction.setAmount(new BigDecimal("100.00"));
         transaction.setCurrency("USD");
         transaction.setPaymentChannel("STRIPE");
@@ -109,7 +112,7 @@ class PaymentApplicationTests {
         PaymentTransaction saved = paymentTransactionRepository.save(transaction);
 
         // When
-        PaymentResponse response = paymentService.getPaymentTransactionByOrderId(orderId);
+        PaymentResponse response = paymentService.getPaymentTransactionByOrderId(MERCHANT_ID, orderId);
 
         // Then
         assertNotNull(response);

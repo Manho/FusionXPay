@@ -15,6 +15,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -153,5 +154,26 @@ class OrderControllerTest {
                 .andExpect(jsonPath("$.status").value(403))
                 .andExpect(jsonPath("$.error").value("Forbidden"))
                 .andExpect(jsonPath("$.message").value("Forbidden: order does not belong to merchant"));
+    }
+
+    @Test
+    @DisplayName("Get orders supports from and to date filters")
+    void getOrders_SupportsDateFilters() throws Exception {
+        orderService.createOrder(OrderRequest.builder()
+                .userId(9L)
+                .amount(new BigDecimal("30.00"))
+                .currency("USD")
+                .build());
+
+        String today = LocalDate.now().toString();
+
+        mockMvc.perform(get("/api/v1/orders")
+                .param("merchantId", "9")
+                .param("from", today)
+                .param("to", today)
+                .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.orders").isArray())
+                .andExpect(jsonPath("$.totalElements").value(1));
     }
 }

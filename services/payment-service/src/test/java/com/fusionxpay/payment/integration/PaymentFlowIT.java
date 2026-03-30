@@ -64,6 +64,15 @@ public class PaymentFlowIT extends AbstractIntegrationTest {
     void setUp() {
         wireMockServer.resetAll();
         paymentTransactionRepository.deleteAll();
+
+        // Stub order-service GET /api/v1/orders/id/{orderId} to return ownership confirmation
+        // The merchant header will be 1 in our tests
+        wireMockServer.stubFor(com.github.tomakehurst.wiremock.client.WireMock.get(
+                com.github.tomakehurst.wiremock.client.WireMock.urlMatching("/api/v1/orders/id/.*"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"orderId\":\"00000000-0000-0000-0000-000000000000\",\"userId\":1}")));
     }
 
     @DynamicPropertySource
@@ -72,6 +81,10 @@ public class PaymentFlowIT extends AbstractIntegrationTest {
         registry.add("payment.providers.stripe.api-base-url", () -> "http://localhost:" + WIREMOCK_PORT);
         registry.add("payment.providers.stripe.secret-key", () -> "sk_test_mock");
         registry.add("payment.providers.stripe.webhook-secret", () -> "whsec_test_mock");
+
+        // Point Feign order-service client to WireMock (avoids Eureka lookup in tests)
+        registry.add("spring.cloud.openfeign.client.config.order-service.url",
+                () -> "http://localhost:" + WIREMOCK_PORT);
 
         // Disable Eureka for tests
         registry.add("eureka.client.enabled", () -> false);
@@ -104,9 +117,13 @@ public class PaymentFlowIT extends AbstractIntegrationTest {
                 .build();
 
         // Act
-        ResponseEntity<PaymentResponse> response = restTemplate.postForEntity(
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("X-Merchant-Id", "1");
+        HttpEntity<PaymentRequest> requestEntity = new HttpEntity<>(request, headers);
+        ResponseEntity<PaymentResponse> response = restTemplate.exchange(
                 "/api/v1/payment/request",
-                request,
+                org.springframework.http.HttpMethod.POST,
+                requestEntity,
                 PaymentResponse.class
         );
 
@@ -130,6 +147,7 @@ public class PaymentFlowIT extends AbstractIntegrationTest {
         UUID orderId = UUID.randomUUID();
         PaymentTransaction transaction = new PaymentTransaction();
         transaction.setOrderId(orderId);
+        transaction.setMerchantId(1L);
         transaction.setAmount(new BigDecimal("99.99"));
         transaction.setCurrency("USD");
         transaction.setPaymentChannel("STRIPE");
@@ -189,6 +207,7 @@ public class PaymentFlowIT extends AbstractIntegrationTest {
         UUID orderId = UUID.randomUUID();
         PaymentTransaction transaction = new PaymentTransaction();
         transaction.setOrderId(orderId);
+        transaction.setMerchantId(1L);
         transaction.setAmount(new BigDecimal("50.00"));
         transaction.setCurrency("USD");
         transaction.setPaymentChannel("STRIPE");
@@ -210,6 +229,7 @@ public class PaymentFlowIT extends AbstractIntegrationTest {
         UUID orderId = UUID.randomUUID();
         PaymentTransaction existingTransaction = new PaymentTransaction();
         existingTransaction.setOrderId(orderId);
+        existingTransaction.setMerchantId(1L);
         existingTransaction.setAmount(new BigDecimal("75.00"));
         existingTransaction.setCurrency("USD");
         existingTransaction.setPaymentChannel("STRIPE");
@@ -225,9 +245,13 @@ public class PaymentFlowIT extends AbstractIntegrationTest {
                 .build();
 
         // Act
-        ResponseEntity<PaymentResponse> response = restTemplate.postForEntity(
+        HttpHeaders dupHeaders = new HttpHeaders();
+        dupHeaders.set("X-Merchant-Id", "1");
+        HttpEntity<PaymentRequest> dupEntity = new HttpEntity<>(request, dupHeaders);
+        ResponseEntity<PaymentResponse> response = restTemplate.exchange(
                 "/api/v1/payment/request",
-                request,
+                org.springframework.http.HttpMethod.POST,
+                dupEntity,
                 PaymentResponse.class
         );
 
@@ -252,6 +276,7 @@ public class PaymentFlowIT extends AbstractIntegrationTest {
         UUID orderId = UUID.randomUUID();
         PaymentTransaction transaction = new PaymentTransaction();
         transaction.setOrderId(orderId);
+        transaction.setMerchantId(1L);
         transaction.setAmount(new BigDecimal("120.00"));
         transaction.setCurrency("EUR");
         transaction.setPaymentChannel("STRIPE");
@@ -259,8 +284,12 @@ public class PaymentFlowIT extends AbstractIntegrationTest {
         PaymentTransaction saved = paymentTransactionRepository.save(transaction);
 
         // Act
-        ResponseEntity<PaymentResponse> response = restTemplate.getForEntity(
+        HttpHeaders getHeaders = new HttpHeaders();
+        getHeaders.set("X-Merchant-Id", "1");
+        ResponseEntity<PaymentResponse> response = restTemplate.exchange(
                 "/api/v1/payment/transaction/" + saved.getTransactionId(),
+                org.springframework.http.HttpMethod.GET,
+                new HttpEntity<>(getHeaders),
                 PaymentResponse.class
         );
 
@@ -280,6 +309,7 @@ public class PaymentFlowIT extends AbstractIntegrationTest {
         UUID orderId = UUID.randomUUID();
         PaymentTransaction transaction = new PaymentTransaction();
         transaction.setOrderId(orderId);
+        transaction.setMerchantId(1L);
         transaction.setAmount(new BigDecimal("85.50"));
         transaction.setCurrency("GBP");
         transaction.setPaymentChannel("STRIPE");
@@ -287,8 +317,12 @@ public class PaymentFlowIT extends AbstractIntegrationTest {
         paymentTransactionRepository.save(transaction);
 
         // Act
-        ResponseEntity<PaymentResponse> response = restTemplate.getForEntity(
+        HttpHeaders orderHeaders = new HttpHeaders();
+        orderHeaders.set("X-Merchant-Id", "1");
+        ResponseEntity<PaymentResponse> response = restTemplate.exchange(
                 "/api/v1/payment/order/" + orderId,
+                org.springframework.http.HttpMethod.GET,
+                new HttpEntity<>(orderHeaders),
                 PaymentResponse.class
         );
 

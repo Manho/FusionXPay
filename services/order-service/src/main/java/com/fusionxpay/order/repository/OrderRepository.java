@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -28,10 +29,14 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
     @Query("SELECT o FROM Order o WHERE " +
            "(:status IS NULL OR o.status = :status) AND " +
            "(:userId IS NULL OR o.userId = :userId) AND " +
-           "(:orderNumber IS NULL OR o.orderNumber LIKE %:orderNumber%)")
+           "(:orderNumber IS NULL OR o.orderNumber LIKE %:orderNumber%) AND " +
+           "(:fromTime IS NULL OR o.createdAt >= :fromTime) AND " +
+           "(:toTime IS NULL OR o.createdAt <= :toTime)")
     Page<Order> findWithFilters(
             @Param("status") String status,
             @Param("userId") Long userId,
             @Param("orderNumber") String orderNumber,
+            @Param("fromTime") LocalDateTime fromTime,
+            @Param("toTime") LocalDateTime toTime,
             Pageable pageable);
 }

@@ -2,7 +2,11 @@ package com.fusionxpay.payment.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fusionxpay.common.model.PaymentStatus;
+import feign.FeignException;
+import feign.Request;
+import com.fusionxpay.payment.client.OrderServiceClient;
 import com.fusionxpay.payment.config.TestConfig;
+import com.fusionxpay.payment.dto.OrderResponse;
 import com.fusionxpay.payment.dto.PaymentRequest;
 import com.fusionxpay.payment.model.PaymentTransaction;
 import com.fusionxpay.payment.provider.PaymentProvider;
@@ -18,9 +22,12 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.mockito.Mockito.reset;
@@ -45,6 +52,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import(TestConfig.class)
 class PaymentControllerTest {
 
+    private static final String MERCHANT_HEADER = "X-Merchant-Id";
+    private static final long MERCHANT_ID = 7L;
+
     @Autowired
     private MockMvc mockMvc;
 
@@ -56,6 +66,9 @@ class PaymentControllerTest {
 
     @MockBean
     private PaymentProviderFactory paymentProviderFactory;
+
+    @MockBean
+    private OrderServiceClient orderServiceClient;
 
     private PaymentProvider paymentProvider;
 
@@ -81,8 +94,12 @@ class PaymentControllerTest {
         paymentRequest.setPaymentChannel("STRIPE");
 
         when(paymentProviderFactory.getProvider("STRIPE")).thenReturn(paymentProvider);
+        when(orderServiceClient.getOrderById(MERCHANT_ID, orderId)).thenReturn(ResponseEntity.ok(
+                OrderResponse.builder().orderId(orderId).userId(MERCHANT_ID).build()
+        ));
 
         mockMvc.perform(post("/api/v1/payment/request")
+                .header(MERCHANT_HEADER, MERCHANT_ID)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(paymentRequest)))
                 .andExpect(status().isOk())
@@ -92,18 +109,47 @@ class PaymentControllerTest {
     }
 
     @Test
+    @DisplayName("Initiate payment returns forbidden when order belongs to another merchant")
+    void initiatePayment_ForbiddenForOtherMerchantOrder() throws Exception {
+        UUID orderId = UUID.randomUUID();
+        PaymentRequest paymentRequest = new PaymentRequest();
+        paymentRequest.setOrderId(orderId);
+        paymentRequest.setAmount(new BigDecimal("100.00"));
+        paymentRequest.setCurrency("USD");
+        paymentRequest.setPaymentChannel("STRIPE");
+
+        Request request = Request.create(Request.HttpMethod.GET,
+                "/api/v1/orders/id/" + orderId,
+                Map.of(),
+                null,
+                StandardCharsets.UTF_8,
+                null);
+        when(orderServiceClient.getOrderById(MERCHANT_ID, orderId))
+                .thenThrow(new FeignException.Forbidden("Forbidden", request, null, Map.of()));
+
+        mockMvc.perform(post("/api/v1/payment/request")
+                .header(MERCHANT_HEADER, MERCHANT_ID)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(paymentRequest)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("Order does not belong to merchant"));
+    }
+
+    @Test
     @DisplayName("Get payment by order ID returns stored transaction")
     void getPaymentStatus_Success() throws Exception {
         UUID orderId = UUID.randomUUID();
         PaymentTransaction transaction = new PaymentTransaction();
         transaction.setOrderId(orderId);
+        transaction.setMerchantId(MERCHANT_ID);
         transaction.setAmount(new BigDecimal("100.00"));
         transaction.setCurrency("USD");
         transaction.setPaymentChannel("STRIPE");
         transaction.setStatus(PaymentStatus.PROCESSING.name());
         paymentTransactionRepository.save(transaction);
 
-        mockMvc.perform(get("/api/v1/payment/order/{orderId}", orderId))
+        mockMvc.perform(get("/api/v1/payment/order/{orderId}", orderId)
+                .header(MERCHANT_HEADER, MERCHANT_ID))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.orderId").value(orderId.toString()))
                 .andExpect(jsonPath("$.status").value("PROCESSING"));
@@ -114,16 +160,68 @@ class PaymentControllerTest {
     void getPaymentTransaction_Success() throws Exception {
         PaymentTransaction transaction = new PaymentTransaction();
         transaction.setOrderId(UUID.randomUUID());
+        transaction.setMerchantId(MERCHANT_ID);
         transaction.setAmount(new BigDecimal("100.00"));
         transaction.setCurrency("USD");
         transaction.setPaymentChannel("STRIPE");
         transaction.setStatus(PaymentStatus.PROCESSING.name());
         PaymentTransaction saved = paymentTransactionRepository.save(transaction);
 
-        mockMvc.perform(get("/api/v1/payment/transaction/{transactionId}", saved.getTransactionId()))
+        mockMvc.perform(get("/api/v1/payment/transaction/{transactionId}", saved.getTransactionId())
+                .header(MERCHANT_HEADER, MERCHANT_ID))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.transactionId").value(saved.getTransactionId().toString()))
                 .andExpect(jsonPath("$.status").value("PROCESSING"));
+    }
+
+    @Test
+    @DisplayName("Search payments returns only the authenticated merchant's payments")
+    void searchPayments_ScopedToMerchant() throws Exception {
+        PaymentTransaction ownTransaction = new PaymentTransaction();
+        ownTransaction.setOrderId(UUID.randomUUID());
+        ownTransaction.setMerchantId(MERCHANT_ID);
+        ownTransaction.setAmount(new BigDecimal("25.00"));
+        ownTransaction.setCurrency("USD");
+        ownTransaction.setPaymentChannel("STRIPE");
+        ownTransaction.setStatus(PaymentStatus.SUCCESS.name());
+        paymentTransactionRepository.save(ownTransaction);
+
+        PaymentTransaction otherTransaction = new PaymentTransaction();
+        otherTransaction.setOrderId(UUID.randomUUID());
+        otherTransaction.setMerchantId(999L);
+        otherTransaction.setAmount(new BigDecimal("30.00"));
+        otherTransaction.setCurrency("USD");
+        otherTransaction.setPaymentChannel("PAYPAL");
+        otherTransaction.setStatus(PaymentStatus.SUCCESS.name());
+        paymentTransactionRepository.save(otherTransaction);
+
+        mockMvc.perform(get("/api/v1/payment/search")
+                .header(MERCHANT_HEADER, MERCHANT_ID)
+                .param("status", "SUCCESS"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.payments").isArray())
+                .andExpect(jsonPath("$.payments.length()").value(1))
+                .andExpect(jsonPath("$.payments[0].orderId").value(ownTransaction.getOrderId().toString()))
+                .andExpect(jsonPath("$.payments[0].paymentChannel").value("STRIPE"));
+    }
+
+    @Test
+    @DisplayName("Get payment by transaction ID returns not found for another merchant")
+    void getPaymentTransaction_NotFoundForOtherMerchant() throws Exception {
+        PaymentTransaction transaction = new PaymentTransaction();
+        transaction.setOrderId(UUID.randomUUID());
+        transaction.setMerchantId(999L);
+        transaction.setAmount(new BigDecimal("100.00"));
+        transaction.setCurrency("USD");
+        transaction.setPaymentChannel("STRIPE");
+        transaction.setStatus(PaymentStatus.PROCESSING.name());
+        PaymentTransaction saved = paymentTransactionRepository.save(transaction);
+
+        mockMvc.perform(get("/api/v1/payment/transaction/{transactionId}", saved.getTransactionId())
+                .header(MERCHANT_HEADER, MERCHANT_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("NOT_FOUND"))
+                .andExpect(jsonPath("$.errorMessage").value("Payment transaction not found"));
     }
 
     @Test

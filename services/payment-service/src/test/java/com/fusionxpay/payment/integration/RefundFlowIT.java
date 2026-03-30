@@ -84,6 +84,7 @@ public class RefundFlowIT extends AbstractIntegrationTest {
         UUID orderId = UUID.randomUUID();
         PaymentTransaction transaction = new PaymentTransaction();
         transaction.setOrderId(orderId);
+        transaction.setMerchantId(1L);
         transaction.setAmount(new BigDecimal("100.00"));
         transaction.setCurrency("USD");
         transaction.setPaymentChannel("STRIPE");
@@ -97,9 +98,13 @@ public class RefundFlowIT extends AbstractIntegrationTest {
                 .build();
 
         // Act
-        ResponseEntity<RefundResponse> response = restTemplate.postForEntity(
+        HttpHeaders refundHeaders = new HttpHeaders();
+        refundHeaders.set("X-Merchant-Id", "1");
+        HttpEntity<RefundRequest> refundEntity = new HttpEntity<>(refundRequest, refundHeaders);
+        ResponseEntity<RefundResponse> response = restTemplate.exchange(
                 "/api/v1/payment/refund",
-                refundRequest,
+                org.springframework.http.HttpMethod.POST,
+                refundEntity,
                 RefundResponse.class
         );
 
@@ -121,6 +126,7 @@ public class RefundFlowIT extends AbstractIntegrationTest {
         UUID orderId = UUID.randomUUID();
         PaymentTransaction transaction = new PaymentTransaction();
         transaction.setOrderId(orderId);
+        transaction.setMerchantId(1L);
         transaction.setAmount(new BigDecimal("200.00"));
         transaction.setCurrency("USD");
         transaction.setPaymentChannel("STRIPE");
@@ -135,9 +141,13 @@ public class RefundFlowIT extends AbstractIntegrationTest {
                 .build();
 
         // Act
-        ResponseEntity<RefundResponse> response = restTemplate.postForEntity(
+        HttpHeaders refundHeaders2 = new HttpHeaders();
+        refundHeaders2.set("X-Merchant-Id", "1");
+        HttpEntity<RefundRequest> refundEntity2 = new HttpEntity<>(refundRequest, refundHeaders2);
+        ResponseEntity<RefundResponse> response = restTemplate.exchange(
                 "/api/v1/payment/refund",
-                refundRequest,
+                org.springframework.http.HttpMethod.POST,
+                refundEntity2,
                 RefundResponse.class
         );
 
@@ -159,9 +169,13 @@ public class RefundFlowIT extends AbstractIntegrationTest {
                 .build();
 
         // Act
-        ResponseEntity<RefundResponse> response = restTemplate.postForEntity(
+        HttpHeaders failHeaders = new HttpHeaders();
+        failHeaders.set("X-Merchant-Id", "1");
+        HttpEntity<RefundRequest> failEntity = new HttpEntity<>(refundRequest, failHeaders);
+        ResponseEntity<RefundResponse> response = restTemplate.exchange(
                 "/api/v1/payment/refund",
-                refundRequest,
+                org.springframework.http.HttpMethod.POST,
+                failEntity,
                 RefundResponse.class
         );
 
@@ -180,6 +194,7 @@ public class RefundFlowIT extends AbstractIntegrationTest {
         UUID orderId = UUID.randomUUID();
         PaymentTransaction transaction = new PaymentTransaction();
         transaction.setOrderId(orderId);
+        transaction.setMerchantId(1L);
         transaction.setAmount(new BigDecimal("75.00"));
         transaction.setCurrency("USD");
         transaction.setPaymentChannel("STRIPE");
@@ -193,9 +208,13 @@ public class RefundFlowIT extends AbstractIntegrationTest {
                 .build();
 
         // Act
-        ResponseEntity<RefundResponse> response = restTemplate.postForEntity(
+        HttpHeaders nonRefHeaders = new HttpHeaders();
+        nonRefHeaders.set("X-Merchant-Id", "1");
+        HttpEntity<RefundRequest> nonRefEntity = new HttpEntity<>(refundRequest, nonRefHeaders);
+        ResponseEntity<RefundResponse> response = restTemplate.exchange(
                 "/api/v1/payment/refund",
-                refundRequest,
+                org.springframework.http.HttpMethod.POST,
+                nonRefEntity,
                 RefundResponse.class
         );
 
@@ -214,6 +233,7 @@ public class RefundFlowIT extends AbstractIntegrationTest {
         UUID orderId = UUID.randomUUID();
         PaymentTransaction transaction = new PaymentTransaction();
         transaction.setOrderId(orderId);
+        transaction.setMerchantId(1L);
         transaction.setAmount(new BigDecimal("150.00"));
         transaction.setCurrency("USD");
         transaction.setPaymentChannel("STRIPE");
@@ -267,6 +287,7 @@ public class RefundFlowIT extends AbstractIntegrationTest {
         UUID orderId = UUID.randomUUID();
         PaymentTransaction transaction = new PaymentTransaction();
         transaction.setOrderId(orderId);
+        transaction.setMerchantId(1L);
         transaction.setAmount(new BigDecimal("60.00"));
         transaction.setCurrency("USD");
         transaction.setPaymentChannel("STRIPE");
@@ -280,9 +301,13 @@ public class RefundFlowIT extends AbstractIntegrationTest {
                 .build();
 
         // Act
-        ResponseEntity<RefundResponse> response = restTemplate.postForEntity(
+        HttpHeaders missingProvHeaders = new HttpHeaders();
+        missingProvHeaders.set("X-Merchant-Id", "1");
+        HttpEntity<RefundRequest> missingProvEntity = new HttpEntity<>(refundRequest, missingProvHeaders);
+        ResponseEntity<RefundResponse> response = restTemplate.exchange(
                 "/api/v1/payment/refund",
-                refundRequest,
+                org.springframework.http.HttpMethod.POST,
+                missingProvEntity,
                 RefundResponse.class
         );
 

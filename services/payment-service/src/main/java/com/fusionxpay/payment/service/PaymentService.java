@@ -1,26 +1,41 @@
 package com.fusionxpay.payment.service;
 
+import com.fusionxpay.common.model.PaymentStatus;
+import feign.FeignException;
+import com.fusionxpay.payment.client.OrderServiceClient;
+import com.fusionxpay.payment.dto.OrderResponse;
+import com.fusionxpay.payment.dto.PaymentPageResponse;
 import com.fusionxpay.payment.dto.PaymentRequest;
 import com.fusionxpay.payment.dto.PaymentResponse;
 import com.fusionxpay.payment.dto.RefundRequest;
 import com.fusionxpay.payment.dto.RefundResponse;
 import com.fusionxpay.payment.event.OrderEventProducer;
-import com.fusionxpay.common.model.PaymentStatus;
 import com.fusionxpay.payment.model.PaymentTransaction;
 import com.fusionxpay.payment.model.RefundStatus;
+import com.fusionxpay.payment.provider.PayPalProvider;
 import com.fusionxpay.payment.provider.PaymentProvider;
 import com.fusionxpay.payment.provider.PaymentProviderFactory;
-import com.fusionxpay.payment.provider.PayPalProvider;
 import com.fusionxpay.payment.provider.StripeProvider;
 import com.fusionxpay.payment.repository.PaymentTransactionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -30,6 +45,7 @@ public class PaymentService {
     private final PaymentTransactionRepository paymentTransactionRepository;
     private final PaymentProviderFactory paymentProviderFactory;
     private final OrderEventProducer orderEventProducer;
+    private final OrderServiceClient orderServiceClient;
 
     @Transactional(readOnly = true)
     public Optional<PaymentTransaction> findTransactionByOrderId(UUID orderId) {
@@ -43,12 +59,13 @@ public class PaymentService {
      * @return PaymentResponse with transaction details and redirect URL
      */
     @Transactional
-    public PaymentResponse initiatePayment(PaymentRequest paymentRequest) {
+    public PaymentResponse initiatePayment(Long merchantId, PaymentRequest paymentRequest) {
         log.info("Initiating payment for order: {}", paymentRequest.getOrderId());
+        validateOrderOwnership(merchantId, paymentRequest.getOrderId());
         
         // Check if there's already a transaction for this order
         Optional<PaymentTransaction> existingTransaction = 
-                paymentTransactionRepository.findByOrderId(paymentRequest.getOrderId());
+                paymentTransactionRepository.findByOrderIdAndMerchantId(paymentRequest.getOrderId(), merchantId);
         
         if (existingTransaction.isPresent()) {
             PaymentTransaction transaction = existingTransaction.get();
@@ -75,6 +92,7 @@ public class PaymentService {
         // Create a new payment transaction
         PaymentTransaction transaction = new PaymentTransaction();
         transaction.setOrderId(paymentRequest.getOrderId());
+        transaction.setMerchantId(merchantId);
         transaction.setAmount(paymentRequest.getAmount());
         transaction.setCurrency(paymentRequest.getCurrency());
         transaction.setPaymentChannel(paymentRequest.getPaymentChannel());
@@ -225,10 +243,11 @@ public class PaymentService {
      * @param transactionId the transaction ID
      * @return PaymentResponse with transaction details or NOT_FOUND status
      */
-    public PaymentResponse getPaymentTransaction(UUID transactionId) {
+    public PaymentResponse getPaymentTransaction(Long merchantId, UUID transactionId) {
         log.info("Getting payment transaction: {}", transactionId);
         
-        Optional<PaymentTransaction> optionalTransaction = paymentTransactionRepository.findById(transactionId);
+        Optional<PaymentTransaction> optionalTransaction =
+                paymentTransactionRepository.findByTransactionIdAndMerchantId(transactionId, merchantId);
         
         if (optionalTransaction.isEmpty()) {
             log.warn("Transaction not found: {}", transactionId);
@@ -248,10 +267,11 @@ public class PaymentService {
      * @param orderId the order ID
      * @return PaymentResponse with transaction details or NOT_FOUND status
      */
-    public PaymentResponse getPaymentTransactionByOrderId(UUID orderId) {
+    public PaymentResponse getPaymentTransactionByOrderId(Long merchantId, UUID orderId) {
         log.info("Getting payment transaction for order: {}", orderId);
         
-        Optional<PaymentTransaction> optionalTransaction = paymentTransactionRepository.findByOrderId(orderId);
+        Optional<PaymentTransaction> optionalTransaction =
+                paymentTransactionRepository.findByOrderIdAndMerchantId(orderId, merchantId);
         
         if (optionalTransaction.isEmpty()) {
             log.warn("Transaction not found for order: {}", orderId);
@@ -263,6 +283,29 @@ public class PaymentService {
         }
         
         return mapTransactionToResponse(optionalTransaction.get(), null, null);
+    }
+
+    @Transactional(readOnly = true)
+    public PaymentPageResponse searchPayments(Long merchantId, int page, int size, String status, String from, String to) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        LocalDateTime fromTime = parseDateBoundary(from, false);
+        LocalDateTime toTime = parseDateBoundary(to, true);
+        String normalizedStatus = (status != null && !status.isBlank()) ? status : null;
+
+        Page<PaymentTransaction> transactionPage =
+                paymentTransactionRepository.findWithFilters(merchantId, normalizedStatus, fromTime, toTime, pageable);
+
+        return PaymentPageResponse.builder()
+                .payments(transactionPage.getContent().stream()
+                        .map(transaction -> mapTransactionToResponse(transaction, null, null))
+                        .collect(Collectors.toList()))
+                .page(transactionPage.getNumber())
+                .size(transactionPage.getSize())
+                .totalElements(transactionPage.getTotalElements())
+                .totalPages(transactionPage.getTotalPages())
+                .first(transactionPage.isFirst())
+                .last(transactionPage.isLast())
+                .build();
     }
     
     /**
@@ -394,7 +437,7 @@ public class PaymentService {
      * @return RefundResponse with refund details
      */
     @Transactional
-    public RefundResponse initiateRefund(RefundRequest refundRequest) {
+    public RefundResponse initiateRefund(Long merchantId, RefundRequest refundRequest) {
         log.info("Initiating refund for transaction: {}", refundRequest.getTransactionId());
 
         // Find the original transaction
@@ -410,7 +453,7 @@ public class PaymentService {
         }
 
         Optional<PaymentTransaction> optionalTransaction =
-                paymentTransactionRepository.findById(transactionId);
+                paymentTransactionRepository.findByTransactionIdAndMerchantId(transactionId, merchantId);
 
         if (optionalTransaction.isEmpty()) {
             log.error("Transaction not found: {}", transactionId);
@@ -523,6 +566,41 @@ public class PaymentService {
                 return RefundStatus.CANCELLED;
             default:
                 return RefundStatus.PROCESSING;
+        }
+    }
+
+    private LocalDateTime parseDateBoundary(String rawValue, boolean endOfDay) {
+        if (rawValue == null || rawValue.isBlank()) {
+            return null;
+        }
+
+        try {
+            return LocalDateTime.parse(rawValue);
+        } catch (DateTimeParseException ignored) {
+            // Try parsing as LocalDate for simple query strings like 2026-03-30.
+        }
+
+        LocalDate date = LocalDate.parse(rawValue);
+        return endOfDay ? date.atTime(23, 59, 59, 999_999_999) : date.atStartOfDay();
+    }
+
+    private void validateOrderOwnership(Long merchantId, UUID orderId) {
+        try {
+            ResponseEntity<OrderResponse> response = orderServiceClient.getOrderById(merchantId, orderId);
+            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Order validation failed");
+            }
+
+            OrderResponse order = response.getBody();
+            if (order.getUserId() == null || !merchantId.equals(order.getUserId())) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Order does not belong to merchant");
+            }
+        } catch (FeignException.Forbidden ex) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Order does not belong to merchant", ex);
+        } catch (FeignException.NotFound ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Order validation failed", ex);
+        } catch (FeignException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Order validation failed", ex);
         }
     }
 }

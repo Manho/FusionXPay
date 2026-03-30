@@ -16,6 +16,9 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -60,7 +63,7 @@ public class OrderService {
      * Get paginated list of orders with optional filters
      */
     @Transactional(readOnly = true)
-    public OrderPageResponse getOrders(int page, int size, String status, Long merchantId, String orderNumber) {
+    public OrderPageResponse getOrders(int page, int size, String status, Long merchantId, String orderNumber, String from, String to) {
         log.info("Fetching orders - page: {}, size: {}, status: {}, merchantId: {}, orderNumber: {}",
                 page, size, status, merchantId, orderNumber);
 
@@ -69,8 +72,17 @@ public class OrderService {
         // Use flexible filtering query
         String statusFilter = (status != null && !status.isEmpty()) ? status : null;
         String orderNumberFilter = (orderNumber != null && !orderNumber.isEmpty()) ? orderNumber : null;
+        LocalDateTime fromTime = parseDateBoundary(from, false);
+        LocalDateTime toTime = parseDateBoundary(to, true);
 
-        Page<Order> orderPage = orderRepository.findWithFilters(statusFilter, merchantId, orderNumberFilter, pageable);
+        Page<Order> orderPage = orderRepository.findWithFilters(
+                statusFilter,
+                merchantId,
+                orderNumberFilter,
+                fromTime,
+                toTime,
+                pageable
+        );
 
         List<OrderResponse> orders = orderPage.getContent().stream()
                 .map(this::mapToOrderResponse)
@@ -197,5 +209,20 @@ public class OrderService {
                 .createdAt(order.getCreatedAt())
                 .updatedAt(order.getUpdatedAt())
                 .build();
+    }
+
+    private LocalDateTime parseDateBoundary(String rawValue, boolean endOfDay) {
+        if (rawValue == null || rawValue.isBlank()) {
+            return null;
+        }
+
+        try {
+            return LocalDateTime.parse(rawValue);
+        } catch (DateTimeParseException ignored) {
+            // Try date-only format for dashboard filters.
+        }
+
+        LocalDate date = LocalDate.parse(rawValue);
+        return endOfDay ? date.atTime(23, 59, 59, 999_999_999) : date.atStartOfDay();
     }
 }

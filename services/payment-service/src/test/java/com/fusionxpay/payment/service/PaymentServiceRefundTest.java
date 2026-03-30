@@ -32,6 +32,8 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 public class PaymentServiceRefundTest {
 
+    private static final long MERCHANT_ID = 23L;
+
     @Mock
     private PaymentTransactionRepository paymentTransactionRepository;
 
@@ -60,6 +62,7 @@ public class PaymentServiceRefundTest {
         successfulTransaction = new PaymentTransaction();
         successfulTransaction.setTransactionId(transactionId);
         successfulTransaction.setOrderId(UUID.randomUUID());
+        successfulTransaction.setMerchantId(MERCHANT_ID);
         successfulTransaction.setAmount(new BigDecimal("100.00"));
         successfulTransaction.setCurrency("USD");
         successfulTransaction.setPaymentChannel("STRIPE");
@@ -77,7 +80,7 @@ public class PaymentServiceRefundTest {
         request.setAmount(new BigDecimal("50.00"));
         request.setReason("Customer request");
 
-        when(paymentTransactionRepository.findById(transactionId))
+        when(paymentTransactionRepository.findByTransactionIdAndMerchantId(transactionId, MERCHANT_ID))
                 .thenReturn(Optional.of(successfulTransaction));
         when(paymentProviderFactory.getProvider("STRIPE")).thenReturn(stripeProvider);
 
@@ -93,7 +96,7 @@ public class PaymentServiceRefundTest {
                 .thenReturn(stripeResponse);
 
         // When
-        RefundResponse response = paymentService.initiateRefund(request);
+        RefundResponse response = paymentService.initiateRefund(MERCHANT_ID, request);
 
         // Then
         assertNotNull(response);
@@ -112,7 +115,7 @@ public class PaymentServiceRefundTest {
         request.setAmount(null); // Full refund
         request.setReason("Full refund");
 
-        when(paymentTransactionRepository.findById(transactionId))
+        when(paymentTransactionRepository.findByTransactionIdAndMerchantId(transactionId, MERCHANT_ID))
                 .thenReturn(Optional.of(successfulTransaction));
         when(paymentProviderFactory.getProvider("STRIPE")).thenReturn(stripeProvider);
 
@@ -127,7 +130,7 @@ public class PaymentServiceRefundTest {
                 .thenReturn(stripeResponse);
 
         // When
-        RefundResponse response = paymentService.initiateRefund(request);
+        RefundResponse response = paymentService.initiateRefund(MERCHANT_ID, request);
 
         // Then
         assertNotNull(response);
@@ -144,7 +147,7 @@ public class PaymentServiceRefundTest {
         request.setTransactionId(transactionId.toString());
         request.setAmount(new BigDecimal("50.00"));
 
-        when(paymentTransactionRepository.findById(transactionId))
+        when(paymentTransactionRepository.findByTransactionIdAndMerchantId(transactionId, MERCHANT_ID))
                 .thenReturn(Optional.of(successfulTransaction));
         when(paymentProviderFactory.getProvider("STRIPE")).thenReturn(stripeProvider);
 
@@ -157,7 +160,7 @@ public class PaymentServiceRefundTest {
                 .thenReturn(stripeResponse);
 
         // When
-        RefundResponse response = paymentService.initiateRefund(request);
+        RefundResponse response = paymentService.initiateRefund(MERCHANT_ID, request);
 
         // Then
         assertNotNull(response);
@@ -182,7 +185,7 @@ public class PaymentServiceRefundTest {
         request.setCurrency("USD");
         request.setReason("Customer request");
 
-        when(paymentTransactionRepository.findById(transactionId))
+        when(paymentTransactionRepository.findByTransactionIdAndMerchantId(transactionId, MERCHANT_ID))
                 .thenReturn(Optional.of(successfulTransaction));
         when(paymentProviderFactory.getProvider("PAYPAL")).thenReturn(payPalProvider);
 
@@ -194,7 +197,7 @@ public class PaymentServiceRefundTest {
                 .thenReturn(paypalResponse);
 
         // When
-        RefundResponse response = paymentService.initiateRefund(request);
+        RefundResponse response = paymentService.initiateRefund(MERCHANT_ID, request);
 
         // Then
         assertNotNull(response);
@@ -213,7 +216,7 @@ public class PaymentServiceRefundTest {
         request.setAmount(new BigDecimal("30.00"));
         request.setCurrency("USD");
 
-        when(paymentTransactionRepository.findById(transactionId))
+        when(paymentTransactionRepository.findByTransactionIdAndMerchantId(transactionId, MERCHANT_ID))
                 .thenReturn(Optional.of(successfulTransaction));
         when(paymentProviderFactory.getProvider("PAYPAL")).thenReturn(payPalProvider);
 
@@ -225,7 +228,7 @@ public class PaymentServiceRefundTest {
                 .thenReturn(paypalResponse);
 
         // When
-        RefundResponse response = paymentService.initiateRefund(request);
+        RefundResponse response = paymentService.initiateRefund(MERCHANT_ID, request);
 
         // Then
         assertNotNull(response);
@@ -242,7 +245,7 @@ public class PaymentServiceRefundTest {
         request.setTransactionId("invalid-uuid");
 
         // When
-        RefundResponse response = paymentService.initiateRefund(request);
+        RefundResponse response = paymentService.initiateRefund(MERCHANT_ID, request);
 
         // Then
         assertNotNull(response);
@@ -256,11 +259,11 @@ public class PaymentServiceRefundTest {
         RefundRequest request = new RefundRequest();
         request.setTransactionId(transactionId.toString());
 
-        when(paymentTransactionRepository.findById(transactionId))
+        when(paymentTransactionRepository.findByTransactionIdAndMerchantId(transactionId, MERCHANT_ID))
                 .thenReturn(Optional.empty());
 
         // When
-        RefundResponse response = paymentService.initiateRefund(request);
+        RefundResponse response = paymentService.initiateRefund(MERCHANT_ID, request);
 
         // Then
         assertNotNull(response);
@@ -276,11 +279,11 @@ public class PaymentServiceRefundTest {
         RefundRequest request = new RefundRequest();
         request.setTransactionId(transactionId.toString());
 
-        when(paymentTransactionRepository.findById(transactionId))
+        when(paymentTransactionRepository.findByTransactionIdAndMerchantId(transactionId, MERCHANT_ID))
                 .thenReturn(Optional.of(successfulTransaction));
 
         // When
-        RefundResponse response = paymentService.initiateRefund(request);
+        RefundResponse response = paymentService.initiateRefund(MERCHANT_ID, request);
 
         // Then
         assertNotNull(response);
@@ -296,11 +299,11 @@ public class PaymentServiceRefundTest {
         RefundRequest request = new RefundRequest();
         request.setTransactionId(transactionId.toString());
 
-        when(paymentTransactionRepository.findById(transactionId))
+        when(paymentTransactionRepository.findByTransactionIdAndMerchantId(transactionId, MERCHANT_ID))
                 .thenReturn(Optional.of(successfulTransaction));
 
         // When
-        RefundResponse response = paymentService.initiateRefund(request);
+        RefundResponse response = paymentService.initiateRefund(MERCHANT_ID, request);
 
         // Then
         assertNotNull(response);
@@ -316,11 +319,11 @@ public class PaymentServiceRefundTest {
         RefundRequest request = new RefundRequest();
         request.setTransactionId(transactionId.toString());
 
-        when(paymentTransactionRepository.findById(transactionId))
+        when(paymentTransactionRepository.findByTransactionIdAndMerchantId(transactionId, MERCHANT_ID))
                 .thenReturn(Optional.of(successfulTransaction));
 
         // When
-        RefundResponse response = paymentService.initiateRefund(request);
+        RefundResponse response = paymentService.initiateRefund(MERCHANT_ID, request);
 
         // Then
         assertNotNull(response);
@@ -335,14 +338,14 @@ public class PaymentServiceRefundTest {
         request.setTransactionId(transactionId.toString());
         request.setAmount(new BigDecimal("50.00"));
 
-        when(paymentTransactionRepository.findById(transactionId))
+        when(paymentTransactionRepository.findByTransactionIdAndMerchantId(transactionId, MERCHANT_ID))
                 .thenReturn(Optional.of(successfulTransaction));
         when(paymentProviderFactory.getProvider("STRIPE")).thenReturn(stripeProvider);
         when(stripeProvider.processRefund(anyString(), any(), any()))
                 .thenThrow(new RuntimeException("Provider error"));
 
         // When
-        RefundResponse response = paymentService.initiateRefund(request);
+        RefundResponse response = paymentService.initiateRefund(MERCHANT_ID, request);
 
         // Then
         assertNotNull(response);

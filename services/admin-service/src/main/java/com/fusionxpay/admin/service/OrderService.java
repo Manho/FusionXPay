@@ -49,11 +49,11 @@ public class OrderService {
             if (params.getOrderNumber() != null) {
                 builder.queryParam("orderNumber", params.getOrderNumber());
             }
-            if (params.getStartDate() != null) {
-                builder.queryParam("startDate", params.getStartDate());
+            if (params.getFrom() != null) {
+                builder.queryParam("from", params.getFrom());
             }
-            if (params.getEndDate() != null) {
-                builder.queryParam("endDate", params.getEndDate());
+            if (params.getTo() != null) {
+                builder.queryParam("to", params.getTo());
             }
 
             // For non-admin users, filter by merchant

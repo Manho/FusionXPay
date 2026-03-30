@@ -16,8 +16,8 @@ public class OrderQueryParams {
 
     private String status;
     private String orderNumber;
-    private String startDate;
-    private String endDate;
+    private String from;
+    private String to;
     private Long userId;
 
     @Builder.Default
