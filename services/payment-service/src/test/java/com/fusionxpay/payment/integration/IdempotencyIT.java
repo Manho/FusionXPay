@@ -298,6 +298,7 @@ public class IdempotencyIT extends AbstractIntegrationTest {
         // Create a payment transaction
         PaymentTransaction transaction = new PaymentTransaction();
         transaction.setOrderId(orderId);
+        transaction.setMerchantId(1L);
         transaction.setAmount(new BigDecimal("75.00"));
         transaction.setCurrency("USD");
         transaction.setPaymentChannel("STRIPE");
