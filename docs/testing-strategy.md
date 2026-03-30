@@ -74,12 +74,11 @@ We do not enforce a single global percentage target. Instead, coverage should pr
 ### 4.1 api-gateway (4)
 - `services/api-gateway/src/test/java/com/fusionxpay/api/gateway/ApiGatewayApplicationTest.java` (integration/smoke)
 - `services/api-gateway/src/test/java/com/fusionxpay/api/gateway/controller/AuthControllerTest.java` (controller)
-- `services/api-gateway/src/test/java/com/fusionxpay/api/gateway/filter/ApiKeyAuthFilterTest.java` (security filter/unit)
-- `services/api-gateway/src/test/java/com/fusionxpay/api/gateway/service/UserServiceTest.java` (service/unit)
+- `services/api-gateway/src/test/java/com/fusionxpay/api/gateway/filter/JwtAuthFilterTest.java` (security filter/unit)
+- `services/api-gateway/src/test/java/com/fusionxpay/api/gateway/integration/JwtAuthFlowIT.java` (integration)
 
 Gaps:
-- No dedicated integration tests for full gateway auth flow with downstream dependencies
-- Limited negative-path coverage for API key rotation and malformed headers
+- Limited malformed JWT and downstream-failure coverage beyond the critical auth flow
 
 ### 4.2 payment-service (11)
 - `services/payment-service/src/test/java/com/fusionxpay/payment/PaymentApplicationTests.java` (integration/smoke)

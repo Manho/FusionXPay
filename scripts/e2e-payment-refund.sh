@@ -47,26 +47,26 @@ print("" if cur is None else cur)
 PY
 }
 
-register_api_user() {
+register_merchant() {
   local suffix ts body
   ts="$(date +%s)"
   suffix="e2e-${ts}"
-  body="$(curl -fsS -X POST "${BASE_URL}/api/v1/auth/register" \
+  body="$(curl -fsS -X POST "${BASE_URL}/api/v1/admin/auth/register" \
     -H "Content-Type: application/json" \
-    -d "{\"username\":\"${suffix}\",\"password\":\"TestPass123!\"}")"
+    -d "{\"merchantName\":\"${suffix}\",\"email\":\"${suffix}@example.com\",\"password\":\"TestPass123!\"}")"
   echo "$body"
 }
 
 create_order() {
-  local api_key="$1"
+  local jwt_token="$1"
   curl -fsS -X POST "${BASE_URL}/api/v1/orders" \
     -H "Content-Type: application/json" \
-    -H "X-API-Key: ${api_key}" \
-    -d "{\"userId\":1,\"amount\":10.00,\"currency\":\"USD\",\"description\":\"e2e payment order\"}"
+    -H "Authorization: Bearer ${jwt_token}" \
+    -d "{\"amount\":10.00,\"currency\":\"USD\",\"description\":\"e2e payment order\"}"
 }
 
 initiate_payment() {
-  local api_key="$1"
+  local jwt_token="$1"
   local order_id="$2"
   local payment_channel="$3"
 
@@ -76,7 +76,7 @@ initiate_payment() {
 
   curl -fsS -X POST "${BASE_URL}/api/v1/payment/request" \
     -H "Content-Type: application/json" \
-    -H "X-API-Key: ${api_key}" \
+    -H "Authorization: Bearer ${jwt_token}" \
     -d "{
       \"orderId\": \"${order_id}\",
       \"amount\": 10.00,
@@ -89,7 +89,7 @@ initiate_payment() {
 }
 
 poll_payment_status() {
-  local api_key="$1"
+  local jwt_token="$1"
   local order_id="$2"
   local deadline_s="${3:-180}"
   local want_status="${4:-SUCCESS}"
@@ -97,7 +97,7 @@ poll_payment_status() {
   start="$(date +%s)"
 
   while true; do
-    body="$(curl -fsS "${BASE_URL}/api/v1/payment/order/${order_id}" -H "X-API-Key: ${api_key}")"
+    body="$(curl -fsS "${BASE_URL}/api/v1/payment/order/${order_id}" -H "Authorization: Bearer ${jwt_token}")"
     status="$(json_get "$body" "status")"
     if [[ "$status" == "$want_status" ]]; then
       echo "$body"
@@ -117,25 +117,25 @@ poll_payment_status() {
 }
 
 refund_payment() {
-  local api_key="$1"
+  local jwt_token="$1"
   local transaction_id="$2"
   curl -fsS -X POST "${BASE_URL}/api/v1/payment/refund" \
     -H "Content-Type: application/json" \
-    -H "X-API-Key: ${api_key}" \
+    -H "Authorization: Bearer ${jwt_token}" \
     -d "{\"transactionId\":\"${transaction_id}\",\"reason\":\"e2e refund\"}"
 }
 
 echo "[INFO] base_url=${BASE_URL}"
 
-user_json="$(register_api_user)"
-api_key="$(json_get "$user_json" "apiKey")"
-if [[ -z "$api_key" ]]; then
-  echo "[ERROR] failed to register api user: $user_json"
+user_json="$(register_merchant)"
+jwt_token="$(json_get "$user_json" "token")"
+if [[ -z "$jwt_token" ]]; then
+  echo "[ERROR] failed to register merchant: $user_json"
   exit 1
 fi
-echo "[INFO] apiKey acquired (${api_key:0:8}...)"
+echo "[INFO] JWT acquired"
 
-order_json="$(create_order "$api_key")"
+order_json="$(create_order "$jwt_token")"
 order_id="$(json_get "$order_json" "orderId")"
 if [[ -z "$order_id" ]]; then
   order_id="$(json_get "$order_json" "id")"
@@ -155,7 +155,7 @@ case "$CHANNEL" in
     ;;
 esac
 
-payment_json="$(initiate_payment "$api_key" "$order_id" "$payment_channel")"
+payment_json="$(initiate_payment "$jwt_token" "$order_id" "$payment_channel")"
 transaction_id="$(json_get "$payment_json" "transactionId")"
 redirect_url="$(json_get "$payment_json" "redirectUrl")"
 status="$(json_get "$payment_json" "status")"
@@ -190,7 +190,7 @@ if [[ "$CHANNEL" == "paypal" ]]; then
 fi
 
 echo "[INFO] waiting for payment SUCCESS via webhook/callback..."
-polled="$(poll_payment_status "$api_key" "$order_id" 300 "SUCCESS")" || true
+polled="$(poll_payment_status "$jwt_token" "$order_id" 300 "SUCCESS")" || true
 polled_status="$(json_get "$polled" "status")"
 provider_tx_id="$(json_get "$polled" "providerTransactionId")"
 
@@ -202,7 +202,7 @@ if [[ "$polled_status" != "SUCCESS" ]]; then
 fi
 
 echo "[INFO] initiating refund..."
-refund_json="$(refund_payment "$api_key" "$transaction_id")"
+refund_json="$(refund_payment "$jwt_token" "$transaction_id")"
 refund_status="$(json_get "$refund_json" "status")"
 refund_error="$(json_get "$refund_json" "errorMessage")"
 
@@ -214,7 +214,7 @@ if [[ "$refund_status" != "COMPLETED" ]]; then
 fi
 
 echo "[INFO] waiting for refund webhook to mark payment REFUNDED..."
-post_refund="$(poll_payment_status "$api_key" "$order_id" 300 "REFUNDED")" || true
+post_refund="$(poll_payment_status "$jwt_token" "$order_id" 300 "REFUNDED")" || true
 post_refund_status="$(json_get "$post_refund" "status")"
 echo "[INFO] post-refund payment status=${post_refund_status}"
 if [[ "$post_refund_status" != "REFUNDED" ]]; then

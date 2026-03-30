@@ -2,10 +2,9 @@ package com.fusionxpay.api.gateway;
 
 import com.fusionxpay.api.gateway.config.SecurityConfig;
 import com.fusionxpay.api.gateway.config.SwaggerConfig;
+import com.fusionxpay.api.gateway.config.JwtConfig;
 import com.fusionxpay.api.gateway.controller.AuthController;
-import com.fusionxpay.api.gateway.filter.ApiKeyAuthFilter;
-import com.fusionxpay.api.gateway.repository.UserRepository;
-import com.fusionxpay.api.gateway.service.UserService;
+import com.fusionxpay.api.gateway.filter.JwtAuthFilter;
 import io.swagger.v3.oas.models.OpenAPI;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -34,17 +33,16 @@ class ApiGatewayApplicationTest {
     void requiredBeansAreAvailable() {
         // Core components
         assertNotNull(applicationContext.getBean(ApiGatewayApplication.class), "ApiGatewayApplication bean should be available");
-        assertNotNull(applicationContext.getBean(UserRepository.class), "UserRepository bean should be available");
-        assertNotNull(applicationContext.getBean(UserService.class), "UserService bean should be available");
 
         // Controllers
         assertNotNull(applicationContext.getBean(AuthController.class), "AuthController bean should be available");
 
         // Filters
-        assertNotNull(applicationContext.getBean(ApiKeyAuthFilter.class), "ApiKeyAuthFilter bean should be available");
+        assertNotNull(applicationContext.getBean(JwtAuthFilter.class), "JwtAuthFilter bean should be available");
 
         // Configuration
         assertNotNull(applicationContext.getBean(SecurityConfig.class), "SecurityConfig bean should be available");
+        assertNotNull(applicationContext.getBean(JwtConfig.class), "JwtConfig bean should be available");
         assertNotNull(applicationContext.getBean(SwaggerConfig.class), "SwaggerConfig bean should be available");
     }
 

@@ -1,5 +1,7 @@
 package com.fusionxpay.api.gateway.config;
 
+import com.fusionxpay.common.security.JwtUtils;
+import lombok.RequiredArgsConstructor;
 import org.springframework.cloud.gateway.filter.ratelimit.KeyResolver;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -10,9 +12,14 @@ import reactor.core.publisher.Mono;
 import java.net.InetSocketAddress;
 
 @Configuration
+@RequiredArgsConstructor
 public class RateLimitingConfig {
 
     private static final String CF_CONNECTING_IP = "Cf-Connecting-Ip";
+    private static final String AUTHORIZATION_HEADER = "Authorization";
+    private static final String BEARER_PREFIX = "Bearer ";
+
+    private final JwtUtils jwtUtils;
 
     @Bean
     @Primary
@@ -35,14 +42,20 @@ public class RateLimitingConfig {
     }
 
     @Bean
-    public KeyResolver apiKeyKeyResolver() {
+    public KeyResolver merchantIdKeyResolver() {
         return exchange -> {
-            String apiKey = exchange.getRequest().getHeaders().getFirst("X-API-Key");
-            if (StringUtils.hasText(apiKey)) {
-                return Mono.just(apiKey);
+            String authorization = exchange.getRequest().getHeaders().getFirst(AUTHORIZATION_HEADER);
+            if (!StringUtils.hasText(authorization) || !authorization.startsWith(BEARER_PREFIX)) {
+                return Mono.empty();
             }
-            // No API key → empty signals denial to the rate limiter
-            return Mono.empty();
+
+            String token = authorization.substring(BEARER_PREFIX.length());
+            if (!jwtUtils.validateToken(token)) {
+                return Mono.empty();
+            }
+
+            Long merchantId = jwtUtils.parseClaims(token).merchantId();
+            return merchantId == null ? Mono.empty() : Mono.just(String.valueOf(merchantId));
         };
     }
 }

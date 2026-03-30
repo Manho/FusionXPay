@@ -11,6 +11,10 @@ API_HOST="${API_HOST:-localhost}"
 API_PORT="${API_PORT:-8080}"
 BASE_URL="http://${API_HOST}:${API_PORT}"
 EUREKA_URL="${EUREKA_URL:-http://localhost:8761}"
+ADMIN_EMAIL="${ADMIN_EMAIL:-}"
+ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
+AUTO_PROVISION_ADMIN="${AUTO_PROVISION_ADMIN:-true}"
+DOCKER_RUNTIME_CHECKS="${DOCKER_RUNTIME_CHECKS:-auto}"
 
 PASS=0
 FAIL=0
@@ -22,6 +26,44 @@ log_pass()  { echo -e "\033[32m[PASS]\033[0m  $*"; PASS=$((PASS+1)); }
 log_fail()  { echo -e "\033[31m[FAIL]\033[0m  $*"; FAIL=$((FAIL+1)); }
 log_warn()  { echo -e "\033[33m[WARN]\033[0m  $*"; WARN=$((WARN+1)); }
 log_section() { echo -e "\n\033[1m=== $* ===\033[0m"; }
+
+normalize_eureka_base() {
+  local raw="$1"
+  raw="${raw%/}"
+  if [[ "$raw" == */eureka ]]; then
+    echo "${raw%/eureka}"
+  else
+    echo "$raw"
+  fi
+}
+
+json_field() {
+  local payload="$1"
+  local field="$2"
+  python3 - <<'PY' "$payload" "$field"
+import json
+import sys
+
+payload = sys.argv[1]
+field = sys.argv[2]
+
+try:
+    obj = json.loads(payload)
+except json.JSONDecodeError:
+    print("")
+    sys.exit(0)
+
+cur = obj
+for part in field.split("."):
+    if isinstance(cur, dict) and part in cur:
+        cur = cur[part]
+    else:
+        cur = None
+        break
+
+print("" if cur is None else cur)
+PY
+}
 
 get_http_code() {
   local code
@@ -63,13 +105,103 @@ check_http_not() {
   fi
 }
 
+post_json() {
+  local url="$1"
+  local payload="$2"
+  curl -s --connect-timeout 5 --max-time 20 \
+    -X POST "$url" \
+    -H "Content-Type: application/json" \
+    -d "$payload" 2>/dev/null || echo "{}"
+}
+
+login_admin() {
+  local email="$1"
+  local password="$2"
+  local response
+  response=$(post_json "${BASE_URL}/api/v1/admin/auth/login" "{\"email\":\"${email}\",\"password\":\"${password}\"}")
+  JWT_TOKEN="$(json_field "$response" "token")"
+}
+
+provision_temp_admin() {
+  if [[ "${AUTO_PROVISION_ADMIN}" != "true" ]]; then
+    return 1
+  fi
+
+  if ! command -v mysql >/dev/null 2>&1; then
+    log_warn "mysql client not available — cannot auto-provision admin"
+    return 1
+  fi
+
+  if [[ -z "${DB_HOST:-}" || -z "${DB_NAME:-}" || -z "${DB_USERNAME:-}" || -z "${DB_PASSWORD:-}" ]]; then
+    log_warn "DB_* environment variables missing — cannot auto-provision admin"
+    return 1
+  fi
+
+  local ts response merchant_email merchant_password merchant_id db_port mysql_status
+  ts="$(date +%s)"
+  merchant_email="verify-admin-${ts}@example.com"
+  merchant_password="TestPass123!"
+
+  response=$(post_json "${BASE_URL}/api/v1/admin/auth/register" "{
+    \"merchantName\": \"Verify Admin ${ts}\",
+    \"email\": \"${merchant_email}\",
+    \"password\": \"${merchant_password}\"
+  }")
+  merchant_id="$(json_field "$response" "merchant.id")"
+  if [[ -z "$merchant_id" ]]; then
+    log_warn "Could not auto-register temporary admin merchant"
+    return 1
+  fi
+
+  db_port="${DB_PORT:-3306}"
+  mysql --host="${DB_HOST}" --port="${db_port}" --user="${DB_USERNAME}" --password="${DB_PASSWORD}" "${DB_NAME}" \
+    -e "UPDATE merchant SET role='ADMIN' WHERE id=${merchant_id};" >/dev/null 2>&1 || mysql_status=$?
+
+  if [[ -n "${mysql_status:-}" ]]; then
+    log_warn "Could not promote temporary merchant to ADMIN in database"
+    return 1
+  fi
+
+  ADMIN_EMAIL="${merchant_email}"
+  ADMIN_PASSWORD="${merchant_password}"
+  log_info "Provisioned temporary admin merchant: ${ADMIN_EMAIL}"
+  return 0
+}
+
+EUREKA_BASE_URL="$(normalize_eureka_base "${EUREKA_URL}")"
+EUREKA_APPS_URL="${EUREKA_BASE_URL}/eureka/apps"
+LOCAL_CONTAINERS="fusionxpay-api-gateway fusionxpay-order-service fusionxpay-payment-service fusionxpay-notification-service fusionxpay-admin-service"
+
+should_run_docker_checks() {
+  case "${DOCKER_RUNTIME_CHECKS}" in
+    true) return 0 ;;
+    false) return 1 ;;
+    auto)
+      if ! command -v docker >/dev/null 2>&1; then
+        return 1
+      fi
+      local container
+      for container in ${LOCAL_CONTAINERS}; do
+        if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${container}$"; then
+          return 0
+        fi
+      done
+      return 1
+      ;;
+    *)
+      log_warn "Invalid DOCKER_RUNTIME_CHECKS=${DOCKER_RUNTIME_CHECKS}; expected true|false|auto"
+      return 1
+      ;;
+  esac
+}
+
 # =============================================================================
 log_section "1. Infrastructure Connectivity"
 # =============================================================================
 
 log_info "Checking middleware services..."
 
-for svc in "Eureka:${EUREKA_URL}/eureka/apps" \
+for svc in "Eureka:${EUREKA_APPS_URL}" \
            "API Gateway:${BASE_URL}/actuator/health"; do
   name="${svc%%:*}"
   url="${svc#*:}"
@@ -87,7 +219,7 @@ log_section "2. Eureka Service Registration"
 
 log_info "Checking registered services in Eureka..."
 
-EUREKA_APPS=$(curl -s -H "Accept: application/json" "${EUREKA_URL}/eureka/apps" 2>/dev/null || echo "{}")
+EUREKA_APPS=$(curl -s -H "Accept: application/json" "${EUREKA_APPS_URL}" 2>/dev/null || echo "{}")
 
 for svc in API-GATEWAY ORDER-SERVICE PAYMENT-SERVICE NOTIFICATION-SERVICE ADMIN-SERVICE; do
   if echo "$EUREKA_APPS" | grep -qi "\"$svc\""; then
@@ -107,49 +239,54 @@ check_http "API Gateway health" "200" "${BASE_URL}/actuator/health"
 log_section "4. Authentication Chain"
 # =============================================================================
 
-log_info "Testing API Key authentication..."
+log_info "Testing JWT authentication..."
 
-# 4.1 No API Key → 401
-check_http "No API Key → 401" "401" "${BASE_URL}/api/v1/orders"
+# 4.1 No JWT → 401
+check_http "No JWT → 401" "401" "${BASE_URL}/api/v1/orders"
 
-# 4.2 Invalid API Key → 401
-check_http "Invalid API Key → 401" "401" "${BASE_URL}/api/v1/orders" \
-  -H "X-API-Key: invalid-key-00000000"
+# 4.2 Invalid JWT → 401
+check_http "Invalid JWT → 401" "401" "${BASE_URL}/api/v1/orders" \
+  -H "Authorization: Bearer invalid-jwt-token"
 
-# 4.3 Register user and get API Key
-log_info "Registering test user to obtain API Key..."
+# 4.3 Register merchant and get JWT
+log_info "Registering test merchant to obtain JWT..."
 TIMESTAMP=$(date +%s)
-REGISTER_RESPONSE=$(curl -s --connect-timeout 5 --max-time 10 \
-  -X POST "${BASE_URL}/api/v1/auth/register" \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"username\": \"chaintest-${TIMESTAMP}\",
-    \"password\": \"TestPass123!\"
-  }" 2>/dev/null || echo "{}")
+REGISTER_RESPONSE=$(post_json "${BASE_URL}/api/v1/admin/auth/register" "{
+  \"merchantName\": \"Chain Test ${TIMESTAMP}\",
+  \"email\": \"chaintest-${TIMESTAMP}@example.com\",
+  \"password\": \"TestPass123!\"
+}")
 
-API_KEY=$(echo "$REGISTER_RESPONSE" | grep -o '"apiKey":"[^"]*"' | head -1 | cut -d'"' -f4 || echo "")
+MERCHANT_JWT="$(json_field "$REGISTER_RESPONSE" "token")"
 
-if [[ -n "$API_KEY" ]]; then
-  log_pass "User registered, API Key obtained: ${API_KEY:0:8}..."
+if [[ -n "$MERCHANT_JWT" ]]; then
+  log_pass "Merchant registered, JWT obtained"
 else
-  log_fail "Could not register user — all chain tests requiring API Key will fail"
-  API_KEY=""
+  log_fail "Could not register merchant — all chain tests requiring JWT will fail"
+  MERCHANT_JWT=""
 fi
 
-# 4.4 Valid API Key → should work
-if [[ -n "$API_KEY" ]]; then
-  check_http_not "Valid API Key → not 401" "401" "${BASE_URL}/api/v1/orders" \
-    -H "X-API-Key: $API_KEY"
+# 4.4 Valid JWT → should work
+if [[ -n "$MERCHANT_JWT" ]]; then
+  check_http_not "Valid JWT → not 401" "401" "${BASE_URL}/api/v1/orders" \
+    -H "Authorization: Bearer $MERCHANT_JWT"
 fi
 
 # 4.5 Admin login
 log_info "Testing admin authentication..."
-LOGIN_RESPONSE=$(curl -s --connect-timeout 5 --max-time 10 \
-  -X POST "${BASE_URL}/api/v1/admin/auth/login" \
-  -H "Content-Type: application/json" \
-  -d '{"email":"admin@fusionxpay.com","password":"admin123"}' 2>/dev/null || echo "{}")
+JWT_TOKEN=""
 
-JWT_TOKEN=$(echo "$LOGIN_RESPONSE" | grep -o '"token":"[^"]*"' | head -1 | cut -d'"' -f4 || echo "")
+if [[ -n "$ADMIN_EMAIL" && -n "$ADMIN_PASSWORD" ]]; then
+  login_admin "$ADMIN_EMAIL" "$ADMIN_PASSWORD"
+fi
+
+if [[ -z "$JWT_TOKEN" ]]; then
+  provision_temp_admin || true
+fi
+
+if [[ -n "$ADMIN_EMAIL" && -n "$ADMIN_PASSWORD" && -z "$JWT_TOKEN" ]]; then
+  login_admin "$ADMIN_EMAIL" "$ADMIN_PASSWORD"
+fi
 
 if [[ -n "$JWT_TOKEN" ]]; then
   log_pass "Admin login successful, JWT obtained"
@@ -163,19 +300,16 @@ log_section "5. API Gateway → Service Routing"
 
 log_info "Verifying gateway routes to downstream services..."
 
-if [[ -n "$API_KEY" ]]; then
-  # Orders route
-  check_http_not "Gateway → Order Service (/api/v1/orders)" "502" \
-    "${BASE_URL}/api/v1/orders" -H "X-API-Key: $API_KEY"
+if [[ -n "$MERCHANT_JWT" ]]; then
+  check_http "Gateway → Order Service (/api/v1/orders)" "200" \
+    "${BASE_URL}/api/v1/orders" -H "Authorization: Bearer $MERCHANT_JWT"
 
-  # Payment route: prefer a simple read-only endpoint so this check doesn't depend on provider secrets.
-  check_http_not "Gateway → Payment Service (/api/v1/payment)" "502" \
-    "${BASE_URL}/api/v1/payment/providers" -H "X-API-Key: $API_KEY"
+  check_http "Gateway → Payment Service (/api/v1/payment/providers)" "200" \
+    "${BASE_URL}/api/v1/payment/providers" -H "Authorization: Bearer $MERCHANT_JWT"
 fi
 
 if [[ -n "$JWT_TOKEN" ]]; then
-  # Admin route
-  check_http_not "Gateway → Admin Service (/api/v1/admin)" "502" \
+  check_http "Gateway → Admin Service (/api/v1/admin/orders)" "200" \
     "${BASE_URL}/api/v1/admin/orders" \
     -H "Authorization: Bearer $JWT_TOKEN"
 fi
@@ -184,60 +318,66 @@ fi
 log_section "6. Cross-Service Call: Payment → Order (Feign)"
 # =============================================================================
 
-if [[ -n "$API_KEY" ]]; then
+if [[ -n "$MERCHANT_JWT" ]]; then
   log_info "Creating an order to test payment → order chain..."
 
   ORDER_RESPONSE=$(curl -s --connect-timeout 5 --max-time 15 \
     -X POST "${BASE_URL}/api/v1/orders" \
-    -H "X-API-Key: $API_KEY" \
+    -H "Authorization: Bearer $MERCHANT_JWT" \
     -H "Content-Type: application/json" \
     -d "{
-      \"userId\": 1,
       \"amount\": 10.00,
       \"currency\": \"USD\",
       \"description\": \"Chain verification test order\"
     }" 2>/dev/null || echo "{}")
 
-  ORDER_ID=$(echo "$ORDER_RESPONSE" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4 || \
-             echo "$ORDER_RESPONSE" | grep -o '"orderId":"[^"]*"' | head -1 | cut -d'"' -f4 || echo "")
+  ORDER_ID="$(json_field "$ORDER_RESPONSE" "id")"
+  if [[ -z "$ORDER_ID" ]]; then
+    ORDER_ID="$(json_field "$ORDER_RESPONSE" "orderId")"
+  fi
 
   if [[ -n "$ORDER_ID" ]]; then
     log_pass "Order created: $ORDER_ID"
 
-    # Initiate payment (will likely fail since Stripe isn't configured, but tests the route)
+    RETURN_URL="https://fusionx.fun/payment/success?orderId=${ORDER_ID}"
+    CANCEL_URL="https://fusionx.fun/payment/cancel?orderId=${ORDER_ID}"
     PAYMENT_CODE=$(get_http_code \
       -X POST "${BASE_URL}/api/v1/payment/request" \
-      -H "X-API-Key: $API_KEY" \
+      -H "Authorization: Bearer $MERCHANT_JWT" \
       -H "Content-Type: application/json" \
       -d "{
         \"orderId\": \"$ORDER_ID\",
         \"amount\": 10.00,
         \"currency\": \"USD\",
-        \"paymentChannel\": \"STRIPE\"
+        \"paymentChannel\": \"STRIPE\",
+        \"description\": \"Chain verification payment\",
+        \"returnUrl\": \"${RETURN_URL}\",
+        \"cancelUrl\": \"${CANCEL_URL}\"
       }")
 
-    if [[ "$PAYMENT_CODE" == "000" ]]; then
-      log_fail "Payment → Order chain — connection failed"
-    elif [[ "$PAYMENT_CODE" != "502" ]]; then
+    if [[ "$PAYMENT_CODE" == "200" ]]; then
       log_pass "Payment → Order chain reachable (HTTP $PAYMENT_CODE)"
+    elif [[ "$PAYMENT_CODE" == "000" ]]; then
+      log_fail "Payment → Order chain — connection failed"
     else
-      log_fail "Payment → Order chain unreachable (HTTP $PAYMENT_CODE)"
+      log_fail "Payment → Order chain returned unexpected HTTP $PAYMENT_CODE"
     fi
   else
     log_fail "Could not create order — payment chain test cannot proceed"
   fi
 else
-  log_warn "No API Key — skipping cross-service call tests"
+  log_warn "No JWT — skipping cross-service call tests"
 fi
 
 # =============================================================================
 log_section "7. Kafka Message Flow Verification"
 # =============================================================================
 
-log_info "Kafka verification requires docker exec access..."
+if should_run_docker_checks; then
+  log_info "Kafka verification requires docker exec access..."
 
-# Check if we can reach the Kafka container
-if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "fusionxpay-kafka\|kafka"; then
+  # Check if we can reach the Kafka container
+  if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "fusionxpay-kafka\|kafka"; then
   KAFKA_CONTAINER=$(docker ps --format '{{.Names}}' 2>/dev/null | grep -E "fusionxpay-kafka|kafka" | head -1)
 
   # List topics
@@ -271,32 +411,37 @@ if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "fusionxpay-kafka\|kafk
   else
     log_warn "Consumer group 'notification-service' not found"
   fi
+  else
+    log_warn "Kafka container not accessible — skipping Kafka checks"
+  fi
 else
-  log_warn "Kafka container not accessible — skipping Kafka checks"
+  log_info "Skipping Kafka docker checks in local/NAS-backed mode"
 fi
 
 # =============================================================================
 log_section "8. Container Health Status"
 # =============================================================================
 
-CONTAINERS="fusionxpay-api-gateway fusionxpay-order-service fusionxpay-payment-service fusionxpay-notification-service fusionxpay-admin-service"
-
-for container in $CONTAINERS; do
-  if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${container}$"; then
-    health=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' "$container" 2>/dev/null || echo "unknown")
-    if [[ "$health" == "healthy" ]]; then
-      log_pass "$container is healthy"
-    elif [[ "$health" == "starting" ]]; then
-      log_warn "$container is still starting"
-    elif [[ "$health" == "no-healthcheck" ]]; then
-      log_warn "$container has no Docker healthcheck configured"
+if should_run_docker_checks; then
+  for container in ${LOCAL_CONTAINERS}; do
+    if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${container}$"; then
+      health=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' "$container" 2>/dev/null || echo "unknown")
+      if [[ "$health" == "healthy" ]]; then
+        log_pass "$container is healthy"
+      elif [[ "$health" == "starting" ]]; then
+        log_warn "$container is still starting"
+      elif [[ "$health" == "no-healthcheck" ]]; then
+        log_warn "$container has no Docker healthcheck configured"
+      else
+        log_fail "$container health: $health"
+      fi
     else
-      log_fail "$container health: $health"
+      log_warn "$container not running"
     fi
-  else
-    log_warn "$container not running"
-  fi
-done
+  done
+else
+  log_info "Skipping Docker container health checks in local/NAS-backed mode"
+fi
 
 # =============================================================================
 log_section "Summary"

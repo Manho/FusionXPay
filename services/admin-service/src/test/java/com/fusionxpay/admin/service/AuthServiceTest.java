@@ -3,6 +3,7 @@ package com.fusionxpay.admin.service;
 import com.fusionxpay.admin.dto.LoginRequest;
 import com.fusionxpay.admin.dto.LoginResponse;
 import com.fusionxpay.admin.dto.MerchantInfo;
+import com.fusionxpay.admin.dto.RegisterRequest;
 import com.fusionxpay.admin.model.Merchant;
 import com.fusionxpay.admin.model.MerchantRole;
 import com.fusionxpay.admin.model.MerchantStatus;
@@ -18,6 +19,7 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.Optional;
 
@@ -40,6 +42,9 @@ class AuthServiceTest {
 
     @Mock
     private JwtTokenProvider jwtTokenProvider;
+
+    @Mock
+    private PasswordEncoder passwordEncoder;
 
     @InjectMocks
     private AuthService authService;
@@ -158,5 +163,38 @@ class AuthServiceTest {
         assertThat(result).isNotNull();
         assertThat(result.getEmail()).isEqualTo("test@example.com");
         assertThat(result.getRole()).isEqualTo(MerchantRole.MERCHANT);
+    }
+
+    @Test
+    void register_Success_ReturnsJwtResponse() {
+        RegisterRequest request = new RegisterRequest();
+        request.setMerchantName("New Merchant");
+        request.setEmail("new@example.com");
+        request.setPassword("password123");
+
+        Merchant savedMerchant = Merchant.builder()
+                .id(2L)
+                .merchantCode("MCHNEW01")
+                .merchantName(request.getMerchantName())
+                .email(request.getEmail())
+                .passwordHash("encoded-password")
+                .role(MerchantRole.MERCHANT)
+                .status(MerchantStatus.ACTIVE)
+                .build();
+
+        when(merchantRepository.existsByEmail(request.getEmail())).thenReturn(false);
+        when(merchantRepository.existsByMerchantCode(any())).thenReturn(false);
+        when(passwordEncoder.encode(request.getPassword())).thenReturn("encoded-password");
+        when(merchantRepository.save(any(Merchant.class))).thenReturn(savedMerchant);
+        when(jwtTokenProvider.generateToken(savedMerchant.getId(), savedMerchant.getEmail(), savedMerchant.getRole().name()))
+                .thenReturn("jwt.token.here");
+        when(jwtTokenProvider.getExpirationInSeconds()).thenReturn(86400L);
+
+        LoginResponse response = authService.register(request);
+
+        assertThat(response.getToken()).isEqualTo("jwt.token.here");
+        assertThat(response.getMerchant()).isNotNull();
+        assertThat(response.getMerchant().getEmail()).isEqualTo("new@example.com");
+        verify(passwordEncoder).encode(request.getPassword());
     }
 }

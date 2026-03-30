@@ -48,7 +48,7 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    @Operation(summary = "Merchant register", description = "Register new merchant and issue initial API key")
+    @Operation(summary = "Merchant register", description = "Register new merchant and issue JWT credentials")
     public ResponseEntity<LoginResponse> register(@Valid @RequestBody RegisterRequest request) {
         return ResponseEntity.ok(authService.register(request));
     }

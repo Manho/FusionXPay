@@ -1,17 +1,12 @@
 package com.fusionxpay.api.gateway.integration;
 
-import com.fusionxpay.api.gateway.model.MerchantAccount;
-import com.fusionxpay.api.gateway.model.MerchantApiKeyRecord;
-import com.fusionxpay.api.gateway.model.MerchantStatus;
-import com.fusionxpay.api.gateway.repository.MerchantAccountRepository;
-import com.fusionxpay.api.gateway.repository.MerchantApiKeyRecordRepository;
-import com.fusionxpay.common.test.AbstractIntegrationTest;
+import com.fusionxpay.common.security.JwtClaims;
+import com.fusionxpay.common.security.JwtUtils;
 import com.github.tomakehurst.wiremock.WireMockServer;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.MediaType;
@@ -19,21 +14,30 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.DockerImageName;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.Map;
-import java.util.UUID;
 
-import static com.github.tomakehurst.wiremock.client.WireMock.*;
+import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
+import static com.github.tomakehurst.wiremock.client.WireMock.any;
+import static com.github.tomakehurst.wiremock.client.WireMock.anyUrl;
+import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
+import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.options;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@Testcontainers
 @TestPropertySource(properties = {
         "eureka.client.enabled=false",
         "spring.cloud.discovery.enabled=false",
-        "spring.cloud.gateway.discovery.locator.enabled=false",
+        "spring.cloud.gateway.server.webflux.discovery.locator.enabled=false",
+        "jwt.secret=fusionxpay-admin-jwt-secret-key-must-be-at-least-256-bits-long",
         "app.rate-limit.login.replenish-rate=1",
         "app.rate-limit.login.burst-capacity=2",
         "app.rate-limit.login.requested-tokens=1",
@@ -44,9 +48,22 @@ import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.options
         "app.rate-limit.orders.burst-capacity=4",
         "app.rate-limit.orders.requested-tokens=1"
 })
-class RateLimitingIntegrationIT extends AbstractIntegrationTest {
+class RateLimitingIntegrationIT {
+
+    private static final String TEST_SECRET = "fusionxpay-admin-jwt-secret-key-must-be-at-least-256-bits-long";
 
     private static WireMockServer backendServer;
+
+    @Container
+    static final GenericContainer<?> redis = new GenericContainer<>(DockerImageName.parse("redis:7-alpine"))
+            .withExposedPorts(6379);
+
+    private final JwtUtils jwtUtils = new JwtUtils(TEST_SECRET);
+
+    @LocalServerPort
+    private int port;
+
+    private WebTestClient webTestClient;
 
     private static synchronized WireMockServer ensureBackendServer() {
         if (backendServer == null) {
@@ -64,26 +81,12 @@ class RateLimitingIntegrationIT extends AbstractIntegrationTest {
     @DynamicPropertySource
     static void overrideGatewayBackends(DynamicPropertyRegistry registry) {
         String backendUrl = "http://localhost:" + ensureBackendServer().port();
-
-        // Point gateway routes to a deterministic local backend so rate limiting tests
-        // don't depend on service discovery / downstream availability.
-        // Uses URI template variables defined in application.yml to avoid Spring
-        // property binding conflicts with YAML-defined route lists.
         registry.add("ADMIN_SERVICE_URI", () -> backendUrl);
         registry.add("ORDER_SERVICE_URI", () -> backendUrl);
         registry.add("PAYMENT_SERVICE_URI", () -> backendUrl);
+        registry.add("spring.data.redis.host", redis::getHost);
+        registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
     }
-
-    @LocalServerPort
-    private int port;
-
-    @Autowired
-    private MerchantAccountRepository merchantAccountRepository;
-
-    @Autowired
-    private MerchantApiKeyRecordRepository merchantApiKeyRecordRepository;
-
-    private WebTestClient webTestClient;
 
     @AfterAll
     static void stopBackendServer() {
@@ -98,19 +101,14 @@ class RateLimitingIntegrationIT extends AbstractIntegrationTest {
                 .baseUrl("http://localhost:" + port)
                 .responseTimeout(Duration.ofSeconds(30))
                 .build();
-
-        merchantApiKeyRecordRepository.deleteAll();
-        merchantAccountRepository.deleteAll();
+        ensureBackendServer().resetRequests();
     }
 
     @Test
     @DisplayName("Admin login endpoint is rate limited by source IP")
     void adminLoginIsRateLimitedByIp() {
-        // burst-capacity=2, replenish-rate=1.  The Redis token-bucket uses epoch-second
-        // granularity, so crossing a second boundary may replenish 1 extra token.
-        // We therefore exhaust the bucket with a generous margin and then assert 429.
         int burstCapacity = 2;
-        int margin = 2; // allow for token replenishment across second boundaries
+        int margin = 2;
 
         for (int i = 0; i < burstCapacity + margin; i++) {
             webTestClient.post()
@@ -130,16 +128,16 @@ class RateLimitingIntegrationIT extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("Payment endpoint is rate limited by API key")
-    void paymentEndpointIsRateLimitedByApiKey() {
-        String apiKey = createActiveMerchantAndApiKey();
+    @DisplayName("Payment endpoint is rate limited by merchant identity")
+    void paymentEndpointIsRateLimitedByMerchantId() {
+        String token = tokenForMerchant(101L);
         int burstCapacity = 3;
         int margin = 2;
 
         for (int i = 0; i < burstCapacity + margin; i++) {
             webTestClient.post()
                     .uri("/api/v1/payment/request")
-                    .header("X-API-Key", apiKey)
+                    .header("Authorization", "Bearer " + token)
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(Map.of("orderId", "order-" + i, "amount", 100))
                     .exchange();
@@ -147,7 +145,7 @@ class RateLimitingIntegrationIT extends AbstractIntegrationTest {
 
         webTestClient.post()
                 .uri("/api/v1/payment/request")
-                .header("X-API-Key", apiKey)
+                .header("Authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(Map.of("orderId", "order-throttled", "amount", 100))
                 .exchange()
@@ -156,59 +154,68 @@ class RateLimitingIntegrationIT extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("Order endpoint is rate limited by API key with its own threshold")
+    @DisplayName("Order endpoint is rate limited by merchant identity with its own threshold")
     void orderEndpointUsesIndependentThreshold() {
-        String apiKey = createActiveMerchantAndApiKey();
+        String token = tokenForMerchant(202L);
         int burstCapacity = 4;
         int margin = 2;
 
         for (int i = 0; i < burstCapacity + margin; i++) {
             webTestClient.get()
                     .uri("/api/v1/orders")
-                    .header("X-API-Key", apiKey)
+                    .header("Authorization", "Bearer " + token)
                     .exchange();
         }
 
         webTestClient.get()
                 .uri("/api/v1/orders")
-                .header("X-API-Key", apiKey)
+                .header("Authorization", "Bearer " + token)
                 .exchange()
                 .expectStatus().isEqualTo(429)
                 .expectHeader().valueEquals("Retry-After", "60");
     }
 
-    private String createActiveMerchantAndApiKey() {
-        String suffix = UUID.randomUUID().toString().substring(0, 8);
-        String apiKey = "fxp_rate_limit_" + UUID.randomUUID();
-        String email = "rate-limit-" + suffix + "@example.com";
+    @Test
+    @DisplayName("Different merchants get isolated payment rate limit buckets")
+    void differentMerchantsHaveIndependentBuckets() {
+        String merchantOneToken = tokenForMerchant(301L);
+        String merchantTwoToken = tokenForMerchant(302L);
+        int burstCapacity = 3;
+        int margin = 2;
 
-        MerchantAccount merchant = MerchantAccount.builder()
-                .email(email)
-                .status(MerchantStatus.ACTIVE)
-                .build();
-        merchant = merchantAccountRepository.save(merchant);
+        for (int i = 0; i < burstCapacity + margin; i++) {
+            webTestClient.post()
+                    .uri("/api/v1/payment/request")
+                    .header("Authorization", "Bearer " + merchantOneToken)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(Map.of("orderId", "merchant-one-" + i, "amount", 100))
+                    .exchange();
+        }
 
-        MerchantApiKeyRecord record = MerchantApiKeyRecord.builder()
-                .merchantId(merchant.getId())
-                .keyHash(sha256(apiKey))
-                .active(true)
-                .build();
-        merchantApiKeyRecordRepository.save(record);
+        webTestClient.post()
+                .uri("/api/v1/payment/request")
+                .header("Authorization", "Bearer " + merchantOneToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("orderId", "merchant-one-throttled", "amount", 100))
+                .exchange()
+                .expectStatus().isEqualTo(429);
 
-        return apiKey;
+        webTestClient.post()
+                .uri("/api/v1/payment/request")
+                .header("Authorization", "Bearer " + merchantTwoToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("orderId", "merchant-two-ok", "amount", 100))
+                .exchange()
+                .expectStatus().isOk();
+
+        ensureBackendServer().verify(postRequestedFor(urlEqualTo("/api/v1/payment/request"))
+                .withHeader("X-Merchant-Id", equalTo("302")));
     }
 
-    private String sha256(String value) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] bytes = digest.digest(value.getBytes(StandardCharsets.UTF_8));
-            StringBuilder builder = new StringBuilder(bytes.length * 2);
-            for (byte b : bytes) {
-                builder.append(String.format("%02x", b));
-            }
-            return builder.toString();
-        } catch (Exception ex) {
-            throw new IllegalStateException(ex);
-        }
+    private String tokenForMerchant(Long merchantId) {
+        return jwtUtils.generateToken(
+                new JwtClaims(merchantId, "merchant-" + merchantId + "@example.com", "MERCHANT"),
+                60_000
+        );
     }
 }

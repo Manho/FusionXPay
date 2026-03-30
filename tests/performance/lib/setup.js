@@ -32,26 +32,28 @@ function callWithRetry(requestFn, context, expectedStatusCodes, maxAttempts = 3)
   fail(`${context} failed. status=${lastResponse && lastResponse.status} body=${lastResponse && lastResponse.body}`);
 }
 
-function registerApiUser() {
-  const username = uniqueSuffix('k6-user');
+function registerMerchantUser() {
+  const merchantName = uniqueSuffix('k6-merchant');
+  const email = `${merchantName}@example.com`;
   const password = __ENV.API_USER_PASSWORD || 'k6-password-123';
-  const payload = JSON.stringify({ username, password });
+  const payload = JSON.stringify({ merchantName, email, password });
 
   const response = callWithRetry(
-    () => http.post(`${BASE_URL}/api/v1/auth/register`, payload, jsonParams({}, [201])),
-    'API user registration',
-    [201]
+    () => http.post(`${BASE_URL}/api/v1/admin/auth/register`, payload, jsonParams({}, [200])),
+    'Merchant registration',
+    [200]
   );
 
-  const body = parseJsonOrFail(response, 'API user registration');
-  if (!body.apiKey) {
-    fail(`API user registration did not return apiKey. body=${response.body}`);
+  const body = parseJsonOrFail(response, 'Merchant registration');
+  if (!body.token) {
+    fail(`Merchant registration did not return token. body=${response.body}`);
   }
 
   return {
-    username,
+    merchantName,
+    email,
     password,
-    apiKey: body.apiKey,
+    token: body.token,
   };
 }
 
@@ -99,10 +101,9 @@ function loginAdmin(adminAccount) {
   return body.token;
 }
 
-function createOrder(apiKey, userId) {
+function createOrder(token) {
   const amount = (10 + Math.random() * 490).toFixed(2);
   const payload = JSON.stringify({
-    userId,
     amount,
     currency: __ENV.ORDER_CURRENCY || 'USD',
   });
@@ -111,7 +112,7 @@ function createOrder(apiKey, userId) {
     () => http.post(
       `${BASE_URL}/api/v1/orders`,
       payload,
-      jsonParams({ 'X-API-Key': apiKey }, [201])
+      jsonParams({ Authorization: `Bearer ${token}` }, [201])
     ),
     'Order creation',
     [201]
@@ -127,18 +128,18 @@ function createOrder(apiKey, userId) {
 
 export function setupTestData(config = {}) {
   const orderPoolSize = asNumber(config.orderPoolSize || __ENV.ORDER_POOL_SIZE, 1);
-  const apiUser = registerApiUser();
+  const merchantUser = registerMerchantUser();
   const adminAccount = registerAdminMerchant();
   const adminToken = loginAdmin(adminAccount);
 
   const orderIds = [];
   for (let i = 0; i < orderPoolSize; i += 1) {
-    orderIds.push(createOrder(apiUser.apiKey, i + 1));
+    orderIds.push(createOrder(merchantUser.token));
   }
 
   return {
     baseUrl: BASE_URL,
-    apiKey: apiUser.apiKey,
+    merchantToken: merchantUser.token,
     adminEmail: adminAccount.email,
     adminPassword: adminAccount.password,
     adminToken,
@@ -146,9 +147,9 @@ export function setupTestData(config = {}) {
   };
 }
 
-export function listOrders(apiKey) {
+export function listOrders(token) {
   return http.get(
     `${BASE_URL}/api/v1/orders?page=0&size=20`,
-    textParams({ 'X-API-Key': apiKey }, [200])
+    textParams({ Authorization: `Bearer ${token}` }, [200])
   );
 }

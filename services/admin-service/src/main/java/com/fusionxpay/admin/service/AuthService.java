@@ -35,7 +35,6 @@ public class AuthService {
     private final MerchantRepository merchantRepository;
     private final JwtTokenProvider jwtTokenProvider;
     private final PasswordEncoder passwordEncoder;
-    private final ApiKeyService apiKeyService;
 
     /**
      * Authenticate merchant and generate JWT token
@@ -115,8 +114,6 @@ public class AuthService {
                 .build();
 
         merchant = merchantRepository.save(merchant);
-        String initialApiKey = apiKeyService.createInitialApiKey(merchant.getId(), merchant.getId(), null, null);
-
         String token = jwtTokenProvider.generateToken(
                 merchant.getId(),
                 merchant.getEmail(),
@@ -126,8 +123,7 @@ public class AuthService {
         return LoginResponse.of(
                 token,
                 jwtTokenProvider.getExpirationInSeconds(),
-                MerchantInfo.fromEntity(merchant),
-                initialApiKey
+                MerchantInfo.fromEntity(merchant)
         );
     }
 

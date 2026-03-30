@@ -40,7 +40,7 @@ export default function (data) {
   const response = http.post(
     `${BASE_URL}/api/v1/payment/request`,
     payload,
-    jsonParams({ 'X-API-Key': data.apiKey }, [200])
+    jsonParams({ Authorization: `Bearer ${data.merchantToken}` }, [200])
   );
 
   if (response.status === 429) {
