@@ -1,7 +1,6 @@
 package com.fusionxpay.api.gateway.controller;
 
 import com.fusionxpay.api.gateway.dto.AuthRequest;
-import com.fusionxpay.api.gateway.dto.AuthResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;

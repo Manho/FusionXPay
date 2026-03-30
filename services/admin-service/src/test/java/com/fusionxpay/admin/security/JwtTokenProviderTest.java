@@ -2,7 +2,6 @@ package com.fusionxpay.admin.security;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -18,10 +17,7 @@ class JwtTokenProviderTest {
 
     @BeforeEach
     void setUp() {
-        jwtTokenProvider = new JwtTokenProvider();
-        ReflectionTestUtils.setField(jwtTokenProvider, "jwtSecret", TEST_SECRET);
-        ReflectionTestUtils.setField(jwtTokenProvider, "jwtExpiration", TEST_EXPIRATION);
-        jwtTokenProvider.init();
+        jwtTokenProvider = new JwtTokenProvider(TEST_SECRET, TEST_EXPIRATION);
     }
 
     @Test

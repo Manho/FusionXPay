@@ -29,7 +29,7 @@ export function setup() {
 export default function (data) {
   const response = http.get(
     `${BASE_URL}/api/v1/orders?page=0&size=20`,
-    textParams({ 'X-API-Key': data.apiKey }, [200])
+    textParams({ Authorization: `Bearer ${data.merchantToken}` }, [200])
   );
 
   if (response.status === 429) {

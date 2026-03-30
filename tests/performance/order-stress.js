@@ -37,7 +37,6 @@ export function setup() {
 
 export default function (data) {
   const payload = JSON.stringify({
-    userId: ((__ITER % 100000) + 1),
     amount: (10 + Math.random() * 490).toFixed(2),
     currency: 'USD',
   });
@@ -45,7 +44,7 @@ export default function (data) {
   const response = http.post(
     `${BASE_URL}/api/v1/orders`,
     payload,
-    jsonParams({ 'X-API-Key': data.apiKey }, [201])
+    jsonParams({ Authorization: `Bearer ${data.merchantToken}` }, [201])
   );
 
   if (response.status === 429) {

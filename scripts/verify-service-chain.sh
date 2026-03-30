@@ -107,39 +107,40 @@ check_http "API Gateway health" "200" "${BASE_URL}/actuator/health"
 log_section "4. Authentication Chain"
 # =============================================================================
 
-log_info "Testing API Key authentication..."
+log_info "Testing JWT authentication..."
 
-# 4.1 No API Key → 401
-check_http "No API Key → 401" "401" "${BASE_URL}/api/v1/orders"
+# 4.1 No JWT → 401
+check_http "No JWT → 401" "401" "${BASE_URL}/api/v1/orders"
 
-# 4.2 Invalid API Key → 401
-check_http "Invalid API Key → 401" "401" "${BASE_URL}/api/v1/orders" \
-  -H "X-API-Key: invalid-key-00000000"
+# 4.2 Invalid JWT → 401
+check_http "Invalid JWT → 401" "401" "${BASE_URL}/api/v1/orders" \
+  -H "Authorization: Bearer invalid-jwt-token"
 
-# 4.3 Register user and get API Key
-log_info "Registering test user to obtain API Key..."
+# 4.3 Register merchant and get JWT
+log_info "Registering test merchant to obtain JWT..."
 TIMESTAMP=$(date +%s)
 REGISTER_RESPONSE=$(curl -s --connect-timeout 5 --max-time 10 \
-  -X POST "${BASE_URL}/api/v1/auth/register" \
+  -X POST "${BASE_URL}/api/v1/admin/auth/register" \
   -H "Content-Type: application/json" \
   -d "{
-    \"username\": \"chaintest-${TIMESTAMP}\",
+    \"merchantName\": \"Chain Test ${TIMESTAMP}\",
+    \"email\": \"chaintest-${TIMESTAMP}@example.com\",
     \"password\": \"TestPass123!\"
   }" 2>/dev/null || echo "{}")
 
-API_KEY=$(echo "$REGISTER_RESPONSE" | grep -o '"apiKey":"[^"]*"' | head -1 | cut -d'"' -f4 || echo "")
+MERCHANT_JWT=$(echo "$REGISTER_RESPONSE" | grep -o '"token":"[^"]*"' | head -1 | cut -d'"' -f4 || echo "")
 
-if [[ -n "$API_KEY" ]]; then
-  log_pass "User registered, API Key obtained: ${API_KEY:0:8}..."
+if [[ -n "$MERCHANT_JWT" ]]; then
+  log_pass "Merchant registered, JWT obtained"
 else
-  log_fail "Could not register user — all chain tests requiring API Key will fail"
-  API_KEY=""
+  log_fail "Could not register merchant — all chain tests requiring JWT will fail"
+  MERCHANT_JWT=""
 fi
 
-# 4.4 Valid API Key → should work
-if [[ -n "$API_KEY" ]]; then
-  check_http_not "Valid API Key → not 401" "401" "${BASE_URL}/api/v1/orders" \
-    -H "X-API-Key: $API_KEY"
+# 4.4 Valid JWT → should work
+if [[ -n "$MERCHANT_JWT" ]]; then
+  check_http_not "Valid JWT → not 401" "401" "${BASE_URL}/api/v1/orders" \
+    -H "Authorization: Bearer $MERCHANT_JWT"
 fi
 
 # 4.5 Admin login
@@ -163,14 +164,14 @@ log_section "5. API Gateway → Service Routing"
 
 log_info "Verifying gateway routes to downstream services..."
 
-if [[ -n "$API_KEY" ]]; then
+if [[ -n "$MERCHANT_JWT" ]]; then
   # Orders route
   check_http_not "Gateway → Order Service (/api/v1/orders)" "502" \
-    "${BASE_URL}/api/v1/orders" -H "X-API-Key: $API_KEY"
+    "${BASE_URL}/api/v1/orders" -H "Authorization: Bearer $MERCHANT_JWT"
 
   # Payment route: prefer a simple read-only endpoint so this check doesn't depend on provider secrets.
   check_http_not "Gateway → Payment Service (/api/v1/payment)" "502" \
-    "${BASE_URL}/api/v1/payment/providers" -H "X-API-Key: $API_KEY"
+    "${BASE_URL}/api/v1/payment/providers" -H "Authorization: Bearer $MERCHANT_JWT"
 fi
 
 if [[ -n "$JWT_TOKEN" ]]; then
@@ -184,15 +185,14 @@ fi
 log_section "6. Cross-Service Call: Payment → Order (Feign)"
 # =============================================================================
 
-if [[ -n "$API_KEY" ]]; then
+if [[ -n "$MERCHANT_JWT" ]]; then
   log_info "Creating an order to test payment → order chain..."
 
   ORDER_RESPONSE=$(curl -s --connect-timeout 5 --max-time 15 \
     -X POST "${BASE_URL}/api/v1/orders" \
-    -H "X-API-Key: $API_KEY" \
+    -H "Authorization: Bearer $MERCHANT_JWT" \
     -H "Content-Type: application/json" \
     -d "{
-      \"userId\": 1,
       \"amount\": 10.00,
       \"currency\": \"USD\",
       \"description\": \"Chain verification test order\"
@@ -207,7 +207,7 @@ if [[ -n "$API_KEY" ]]; then
     # Initiate payment (will likely fail since Stripe isn't configured, but tests the route)
     PAYMENT_CODE=$(get_http_code \
       -X POST "${BASE_URL}/api/v1/payment/request" \
-      -H "X-API-Key: $API_KEY" \
+      -H "Authorization: Bearer $MERCHANT_JWT" \
       -H "Content-Type: application/json" \
       -d "{
         \"orderId\": \"$ORDER_ID\",
@@ -227,7 +227,7 @@ if [[ -n "$API_KEY" ]]; then
     log_fail "Could not create order — payment chain test cannot proceed"
   fi
 else
-  log_warn "No API Key — skipping cross-service call tests"
+  log_warn "No JWT — skipping cross-service call tests"
 fi
 
 # =============================================================================
