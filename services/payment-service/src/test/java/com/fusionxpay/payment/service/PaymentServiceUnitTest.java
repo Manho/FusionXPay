@@ -1,6 +1,10 @@
 package com.fusionxpay.payment.service;
 
 import com.fusionxpay.common.model.PaymentStatus;
+import feign.FeignException;
+import feign.Request;
+import com.fusionxpay.payment.client.OrderServiceClient;
+import com.fusionxpay.payment.dto.OrderResponse;
 import com.fusionxpay.payment.dto.PaymentRequest;
 import com.fusionxpay.payment.dto.PaymentResponse;
 import com.fusionxpay.payment.event.OrderEventProducer;
@@ -15,10 +19,14 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -29,6 +37,8 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 public class PaymentServiceUnitTest {
 
+    private static final long MERCHANT_ID = 42L;
+
     @Mock
     private PaymentTransactionRepository paymentTransactionRepository;
 
@@ -37,6 +47,9 @@ public class PaymentServiceUnitTest {
 
     @Mock
     private OrderEventProducer orderEventProducer;
+
+    @Mock
+    private OrderServiceClient orderServiceClient;
 
     @Mock
     private PaymentProvider paymentProvider;
@@ -65,6 +78,7 @@ public class PaymentServiceUnitTest {
         paymentTransaction = new PaymentTransaction();
         paymentTransaction.setTransactionId(transactionId);
         paymentTransaction.setOrderId(orderId);
+        paymentTransaction.setMerchantId(MERCHANT_ID);
         paymentTransaction.setAmount(new BigDecimal("100.00"));
         paymentTransaction.setCurrency("USD");
         paymentTransaction.setPaymentChannel("STRIPE");
@@ -86,41 +100,44 @@ public class PaymentServiceUnitTest {
     @Test
     void testGetPaymentTransactionByOrderId_NotFound() {
         // Given
-        when(paymentTransactionRepository.findByOrderId(orderId)).thenReturn(Optional.empty());
+        when(paymentTransactionRepository.findByOrderIdAndMerchantId(orderId, MERCHANT_ID)).thenReturn(Optional.empty());
         
         // When
-        PaymentResponse response = paymentService.getPaymentTransactionByOrderId(orderId);
+        PaymentResponse response = paymentService.getPaymentTransactionByOrderId(MERCHANT_ID, orderId);
         
         // Then
         assertNotNull(response);
         assertEquals(PaymentStatus.NOT_FOUND, response.getStatus());
         assertEquals(orderId, response.getOrderId());
-        verify(paymentTransactionRepository).findByOrderId(orderId);
+        verify(paymentTransactionRepository).findByOrderIdAndMerchantId(orderId, MERCHANT_ID);
     }
     
     @Test
     void testGetPaymentTransactionByOrderId_Found() {
         // Given
         paymentTransaction.setStatus(PaymentStatus.SUCCESS.name());
-        when(paymentTransactionRepository.findByOrderId(orderId)).thenReturn(Optional.of(paymentTransaction));
+        when(paymentTransactionRepository.findByOrderIdAndMerchantId(orderId, MERCHANT_ID)).thenReturn(Optional.of(paymentTransaction));
         
         // When
-        PaymentResponse response = paymentService.getPaymentTransactionByOrderId(orderId);
+        PaymentResponse response = paymentService.getPaymentTransactionByOrderId(MERCHANT_ID, orderId);
         
         // Then
         assertNotNull(response);
         assertEquals(PaymentStatus.SUCCESS, response.getStatus());
         assertEquals(orderId, response.getOrderId());
         assertEquals(transactionId, response.getTransactionId());
-        verify(paymentTransactionRepository).findByOrderId(orderId);
+        verify(paymentTransactionRepository).findByOrderIdAndMerchantId(orderId, MERCHANT_ID);
     }
     
     @Test
     void testInitiatePayment_NewTransaction() {
         // Given
-        when(paymentTransactionRepository.findByOrderId(orderId)).thenReturn(Optional.empty());
+        when(paymentTransactionRepository.findByOrderIdAndMerchantId(orderId, MERCHANT_ID)).thenReturn(Optional.empty());
         when(paymentProviderFactory.getProvider("STRIPE")).thenReturn(paymentProvider);
         when(paymentTransactionRepository.save(any(PaymentTransaction.class))).thenReturn(paymentTransaction);
+        when(orderServiceClient.getOrderById(MERCHANT_ID, orderId)).thenReturn(ResponseEntity.ok(
+                OrderResponse.builder().orderId(orderId).userId(MERCHANT_ID).build()
+        ));
         
         PaymentResponse providerResponse = PaymentResponse.builder()
                 .transactionId(transactionId)
@@ -135,14 +152,14 @@ public class PaymentServiceUnitTest {
         when(paymentProvider.processPayment(paymentRequest)).thenReturn(providerResponse);
 
         // When
-        PaymentResponse response = paymentService.initiatePayment(paymentRequest);
+        PaymentResponse response = paymentService.initiatePayment(MERCHANT_ID, paymentRequest);
 
         // Then
         assertNotNull(response);
         assertEquals(transactionId, response.getTransactionId());
         assertEquals(orderId, response.getOrderId());
         
-        verify(paymentTransactionRepository).findByOrderId(orderId);
+        verify(paymentTransactionRepository).findByOrderIdAndMerchantId(orderId, MERCHANT_ID);
         verify(paymentProviderFactory).getProvider("STRIPE");
         verify(paymentTransactionRepository, times(2)).save(any(PaymentTransaction.class));
         verify(paymentProvider).processPayment(paymentRequest);
@@ -165,10 +182,13 @@ public class PaymentServiceUnitTest {
     void testInitiatePayment_ExistingTransaction() {
         // Given
         paymentTransaction.setStatus(PaymentStatus.PROCESSING.name());
-        when(paymentTransactionRepository.findByOrderId(orderId)).thenReturn(Optional.of(paymentTransaction));
+        when(paymentTransactionRepository.findByOrderIdAndMerchantId(orderId, MERCHANT_ID)).thenReturn(Optional.of(paymentTransaction));
+        when(orderServiceClient.getOrderById(MERCHANT_ID, orderId)).thenReturn(ResponseEntity.ok(
+                OrderResponse.builder().orderId(orderId).userId(MERCHANT_ID).build()
+        ));
         
         // When
-        PaymentResponse response = paymentService.initiatePayment(paymentRequest);
+        PaymentResponse response = paymentService.initiatePayment(MERCHANT_ID, paymentRequest);
         
         // Then
         assertNotNull(response);
@@ -176,10 +196,34 @@ public class PaymentServiceUnitTest {
         assertEquals(orderId, response.getOrderId());
         assertEquals(PaymentStatus.PROCESSING, response.getStatus());
         
-        verify(paymentTransactionRepository).findByOrderId(orderId);
+        verify(paymentTransactionRepository).findByOrderIdAndMerchantId(orderId, MERCHANT_ID);
         verifyNoInteractions(paymentProviderFactory);
         verifyNoInteractions(paymentProvider);
         verifyNoMoreInteractions(paymentTransactionRepository);
+    }
+
+    @Test
+    void testInitiatePayment_ThrowsForbiddenWhenOrderBelongsToAnotherMerchant() {
+        when(orderServiceClient.getOrderById(MERCHANT_ID, orderId)).thenThrow(feignForbidden());
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> paymentService.initiatePayment(MERCHANT_ID, paymentRequest));
+
+        assertEquals(403, exception.getStatusCode().value());
+        verifyNoInteractions(paymentProviderFactory);
+        verify(paymentTransactionRepository, never()).save(any());
+    }
+
+    @Test
+    void testInitiatePayment_ThrowsBadRequestWhenOrderDoesNotExist() {
+        when(orderServiceClient.getOrderById(MERCHANT_ID, orderId)).thenThrow(feignNotFound());
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> paymentService.initiatePayment(MERCHANT_ID, paymentRequest));
+
+        assertEquals(400, exception.getStatusCode().value());
+        verifyNoInteractions(paymentProviderFactory);
+        verify(paymentTransactionRepository, never()).save(any());
     }
 
     @Test
@@ -188,6 +232,7 @@ public class PaymentServiceUnitTest {
         PaymentTransaction existing = new PaymentTransaction();
         existing.setTransactionId(UUID.randomUUID());
         existing.setOrderId(orderId);
+        existing.setMerchantId(MERCHANT_ID);
         existing.setAmount(new BigDecimal("100.00"));
         existing.setCurrency("USD");
         existing.setPaymentChannel("STRIPE");
@@ -213,5 +258,15 @@ public class PaymentServiceUnitTest {
         verify(paymentTransactionRepository).save(argThat(tx ->
                 "pi_test_final".equals(tx.getProviderTransactionId())
         ));
+    }
+
+    private FeignException.Forbidden feignForbidden() {
+        Request request = Request.create(Request.HttpMethod.GET, "/api/v1/orders/id/" + orderId, Map.of(), null, StandardCharsets.UTF_8, null);
+        return new FeignException.Forbidden("Forbidden", request, null, Map.of());
+    }
+
+    private FeignException.NotFound feignNotFound() {
+        Request request = Request.create(Request.HttpMethod.GET, "/api/v1/orders/id/" + orderId, Map.of(), null, StandardCharsets.UTF_8, null);
+        return new FeignException.NotFound("Not Found", request, null, Map.of());
     }
 }

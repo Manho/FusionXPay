@@ -17,6 +17,9 @@ public class PaymentTransaction {
     
     @Column(nullable = false)
     private UUID orderId;
+
+    @Column(nullable = false)
+    private Long merchantId;
     
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal amount;

@@ -21,6 +21,7 @@ import java.util.UUID;
 
 import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -29,6 +30,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @ExtendWith(MockitoExtension.class)
 public class PaymentControllerUnitTest {
+
+    private static final String MERCHANT_HEADER = "X-Merchant-Id";
+    private static final long MERCHANT_ID = 42L;
 
     private MockMvc mockMvc;
 
@@ -84,9 +88,10 @@ public class PaymentControllerUnitTest {
 
     @Test
     void testInitiatePayment() throws Exception {
-        when(paymentService.initiatePayment(any(PaymentRequest.class))).thenReturn(paymentResponse);
+        when(paymentService.initiatePayment(eq(MERCHANT_ID), any(PaymentRequest.class))).thenReturn(paymentResponse);
 
         mockMvc.perform(post("/api/v1/payment/request")
+                .header(MERCHANT_HEADER, MERCHANT_ID)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(paymentRequest)))
                 .andExpect(status().isOk())
@@ -98,9 +103,10 @@ public class PaymentControllerUnitTest {
 
     @Test
     void testGetPaymentStatus() throws Exception {
-        when(paymentService.getPaymentTransactionByOrderId(orderId)).thenReturn(paymentResponse);
+        when(paymentService.getPaymentTransactionByOrderId(MERCHANT_ID, orderId)).thenReturn(paymentResponse);
 
-        mockMvc.perform(get("/api/v1/payment/order/{orderId}", orderId))
+        mockMvc.perform(get("/api/v1/payment/order/{orderId}", orderId)
+                .header(MERCHANT_HEADER, MERCHANT_ID))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.transactionId").value(transactionId.toString()))
                 .andExpect(jsonPath("$.orderId").value(orderId.toString()))

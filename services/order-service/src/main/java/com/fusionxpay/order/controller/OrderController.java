@@ -61,7 +61,11 @@ public class OrderController {
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) Long merchantId,
-            @RequestParam(required = false) String orderNumber) {
+            @RequestParam(required = false) String orderNumber,
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate) {
         log.info("Received get orders request - page: {}, size: {}, status: {}, merchantId: {}",
                 page, size, status, merchantId);
 
@@ -73,7 +77,10 @@ public class OrderController {
             }
         }
 
-        OrderPageResponse response = orderService.getOrders(page, size, status, merchantId, orderNumber);
+        String effectiveFrom = (from != null && !from.isBlank()) ? from : startDate;
+        String effectiveTo = (to != null && !to.isBlank()) ? to : endDate;
+
+        OrderPageResponse response = orderService.getOrders(page, size, status, merchantId, orderNumber, effectiveFrom, effectiveTo);
         return ResponseEntity.ok(response);
     }
 

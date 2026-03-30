@@ -37,6 +37,8 @@ public class OrderController {
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String orderNumber,
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to,
             @RequestParam(required = false) String startDate,
             @RequestParam(required = false) String endDate,
             HttpServletRequest request) {
@@ -49,8 +51,8 @@ public class OrderController {
                 .size(size)
                 .status(status)
                 .orderNumber(orderNumber)
-                .startDate(startDate)
-                .endDate(endDate)
+                .from((from != null && !from.isBlank()) ? from : startDate)
+                .to((to != null && !to.isBlank()) ? to : endDate)
                 .build();
 
         OrderPageResponse response = orderService.getOrders(params, isAdmin, merchantId);
