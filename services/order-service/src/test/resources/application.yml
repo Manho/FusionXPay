@@ -19,7 +19,7 @@ spring:
         dialect: org.hibernate.dialect.MySQL8Dialect
         format_sql: true
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:192.168.50.225:9092}
     consumer:
       group-id: order-service-group
       auto-offset-reset: earliest
@@ -35,7 +35,7 @@ kafka:
 eureka:
   client:
     service-url:
-      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka}
+      defaultZone: ${EUREKA_URL:http://192.168.50.225:8761/eureka}
   instance:
     prefer-ip-address: true
 
