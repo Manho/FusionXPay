@@ -6,15 +6,28 @@ COMPOSE_FILE="${ROOT_DIR}/docker-compose.always-on.yml"
 ENV_FILE="${1:-${ROOT_DIR}/.env.always-on}"
 DEPLOY_LOG_FILE="$(mktemp "${TMPDIR:-/tmp}/fusionxpay-deploy.XXXXXX.log")"
 
+infer_image_prefix() {
+  local remote_url repo_path
+  remote_url="$(git config --get remote.origin.url 2>/dev/null || true)"
+  repo_path="$(printf '%s\n' "${remote_url}" | sed -E 's#(git@|https?://)([^/:]+)[:/]##; s#\.git$##')"
+
+  if [[ -n "${repo_path}" && "${repo_path}" == */* ]]; then
+    printf '%s\n' "${repo_path}" | tr '[:upper:]' '[:lower:]'
+    return
+  fi
+
+  printf 'manho/fusionxpay\n'
+}
+
 compose() {
   docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" "$@"
 }
 
-is_transient_registry_error() {
+is_transient_network_error() {
   local log_file="$1"
-  # Common transient network/registry issues observed on self-hosted runners.
+  # Common transient registry and TLS handshake issues observed on self-hosted runners.
   grep -Eiq \
-    'failed to copy:|httpReadSeeker: failed|unexpected EOF|(^|[^a-z])EOF([^a-z]|$)|tls handshake timeout|connection reset by peer|i/o timeout|temporary failure in name resolution|net/http: request canceled|503 Service Unavailable|429 Too Many Requests' \
+    'failed to copy:|httpReadSeeker: failed|unexpected EOF|(^|[^a-z])EOF([^a-z]|$)|tls handshake timeout|connection reset by peer|i/o timeout|temporary failure in name resolution|net/http: request canceled|503 Service Unavailable|429 Too Many Requests|Remote host terminated the handshake|SSL peer shut down incorrectly|Connection closed before full header was received|Connection reset|Premature end of Content-Length delimited message body' \
     "${log_file}"
 }
 
@@ -31,6 +44,13 @@ fi
 
 echo "[INFO] Using compose file: ${COMPOSE_FILE}"
 echo "[INFO] Using env file: ${ENV_FILE}"
+export DEPLOY_IMAGE_REGISTRY="${DEPLOY_IMAGE_REGISTRY:-ghcr.io}"
+export DEPLOY_IMAGE_PREFIX="${DEPLOY_IMAGE_PREFIX:-$(infer_image_prefix)}"
+export DEPLOY_IMAGE_TAG="${DEPLOY_IMAGE_TAG:-$(git rev-parse --short=7 HEAD)}"
+
+echo "[INFO] Using image registry: ${DEPLOY_IMAGE_REGISTRY}"
+echo "[INFO] Using image prefix: ${DEPLOY_IMAGE_PREFIX}"
+echo "[INFO] Using image tag: ${DEPLOY_IMAGE_TAG}"
 
 if ! grep -Eq '^[[:space:]]*CORS_ALLOWED_ORIGINS=' "${ENV_FILE}"; then
   echo "[ERROR] Missing CORS_ALLOWED_ORIGINS in env file: ${ENV_FILE}"
@@ -40,6 +60,35 @@ fi
 echo "[INFO] CORS_ALLOWED_ORIGINS is configured in env file."
 
 compose config >/dev/null
+
+echo "[INFO] Pulling upstream images (with retries on transient failures)..."
+pull_attempt=1
+pull_max_attempts="${DEPLOY_PULL_MAX_ATTEMPTS:-4}"
+pull_backoff_seconds="${DEPLOY_PULL_BACKOFF_SECONDS:-3}"
+while (( pull_attempt <= pull_max_attempts )); do
+  if compose pull 2>&1 | tee "${DEPLOY_LOG_FILE}"; then
+    break
+  fi
+
+  if is_transient_network_error "${DEPLOY_LOG_FILE}"; then
+    echo "[WARN] docker compose pull hit a transient registry/network error (attempt ${pull_attempt}/${pull_max_attempts})."
+    sleep "${pull_backoff_seconds}"
+    pull_backoff_seconds=$((pull_backoff_seconds * 2))
+    pull_attempt=$((pull_attempt + 1))
+    continue
+  fi
+
+  echo "[ERROR] docker compose pull failed for a non-transient reason."
+  exit 1
+done
+
+if (( pull_attempt > pull_max_attempts )); then
+  echo "[ERROR] docker compose pull failed after ${pull_max_attempts} attempts due to transient registry/network errors."
+  exit 1
+fi
+
+echo "[INFO] Stopping existing project containers..."
+compose down --timeout 30 --remove-orphans
 
 # --- Eureka cleanup: deregister stale instances before redeployment ---
 EUREKA_URL=$(grep -oP '(?<=EUREKA_URL=).*' "${ENV_FILE}" | head -1)
@@ -80,42 +129,13 @@ for name in $(compose config --services); do
   fi
 done
 
-echo "[INFO] Stopping existing project containers..."
-compose down --timeout 30 --remove-orphans
-
-echo "[INFO] Pulling upstream images (with retries on transient failures)..."
-pull_attempt=1
-pull_max_attempts="${DEPLOY_PULL_MAX_ATTEMPTS:-4}"
-pull_backoff_seconds="${DEPLOY_PULL_BACKOFF_SECONDS:-3}"
-while (( pull_attempt <= pull_max_attempts )); do
-  if compose pull 2>&1 | tee "${DEPLOY_LOG_FILE}"; then
-    break
-  fi
-
-  if is_transient_registry_error "${DEPLOY_LOG_FILE}"; then
-    echo "[WARN] docker compose pull hit a transient registry/network error (attempt ${pull_attempt}/${pull_max_attempts})."
-    sleep "${pull_backoff_seconds}"
-    pull_backoff_seconds=$((pull_backoff_seconds * 2))
-    pull_attempt=$((pull_attempt + 1))
-    continue
-  fi
-
-  echo "[ERROR] docker compose pull failed for a non-transient reason."
-  exit 1
-done
-
-if (( pull_attempt > pull_max_attempts )); then
-  echo "[ERROR] docker compose pull failed after ${pull_max_attempts} attempts due to transient registry/network errors."
-  exit 1
-fi
-
-echo "[INFO] Building and starting always-on services..."
+echo "[INFO] Starting always-on services from published images..."
 up_attempt=1
 up_max_attempts="${DEPLOY_UP_MAX_ATTEMPTS:-4}"
 up_backoff_seconds="${DEPLOY_UP_BACKOFF_SECONDS:-3}"
 
 while (( up_attempt <= up_max_attempts )); do
-  if compose up -d --build --remove-orphans 2>&1 | tee "${DEPLOY_LOG_FILE}"; then
+  if compose up -d --remove-orphans 2>&1 | tee "${DEPLOY_LOG_FILE}"; then
     break
   fi
 
@@ -144,7 +164,7 @@ while (( up_attempt <= up_max_attempts )); do
     continue
   fi
 
-  if is_transient_registry_error "${DEPLOY_LOG_FILE}"; then
+  if is_transient_network_error "${DEPLOY_LOG_FILE}"; then
     echo "[WARN] docker compose up hit a transient registry/network error (attempt ${up_attempt}/${up_max_attempts})."
     sleep "${up_backoff_seconds}"
     up_backoff_seconds=$((up_backoff_seconds * 2))

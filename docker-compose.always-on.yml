@@ -1,5 +1,3 @@
-version: "3.8"
-
 x-common-env: &common-env
   DB_HOST: ${DB_HOST:?DB_HOST is required}
   DB_PORT: ${DB_PORT:-3306}
@@ -24,9 +22,7 @@ x-common-service: &common-service
 services:
   api-gateway:
     <<: *common-service
-    build:
-      context: .
-      dockerfile: services/api-gateway/Dockerfile
+    image: ${DEPLOY_IMAGE_REGISTRY:-ghcr.io}/${DEPLOY_IMAGE_PREFIX:-manho/fusionxpay}-api-gateway:${DEPLOY_IMAGE_TAG:-latest}
     container_name: fusionxpay-api-gateway
     hostname: api-gateway
     ports:
@@ -49,9 +45,7 @@ services:
 
   payment-service:
     <<: *common-service
-    build:
-      context: .
-      dockerfile: services/payment-service/Dockerfile
+    image: ${DEPLOY_IMAGE_REGISTRY:-ghcr.io}/${DEPLOY_IMAGE_PREFIX:-manho/fusionxpay}-payment-service:${DEPLOY_IMAGE_TAG:-latest}
     container_name: fusionxpay-payment-service
     hostname: payment-service
     mem_limit: 960m
@@ -80,9 +74,7 @@ services:
 
   order-service:
     <<: *common-service
-    build:
-      context: .
-      dockerfile: services/order-service/Dockerfile
+    image: ${DEPLOY_IMAGE_REGISTRY:-ghcr.io}/${DEPLOY_IMAGE_PREFIX:-manho/fusionxpay}-order-service:${DEPLOY_IMAGE_TAG:-latest}
     container_name: fusionxpay-order-service
     hostname: order-service
     mem_limit: 768m
@@ -99,9 +91,7 @@ services:
 
   notification-service:
     <<: *common-service
-    build:
-      context: .
-      dockerfile: services/notification-service/Dockerfile
+    image: ${DEPLOY_IMAGE_REGISTRY:-ghcr.io}/${DEPLOY_IMAGE_PREFIX:-manho/fusionxpay}-notification-service:${DEPLOY_IMAGE_TAG:-latest}
     container_name: fusionxpay-notification-service
     hostname: notification-service
     mem_limit: 512m
@@ -118,9 +108,7 @@ services:
 
   admin-service:
     <<: *common-service
-    build:
-      context: .
-      dockerfile: services/admin-service/Dockerfile
+    image: ${DEPLOY_IMAGE_REGISTRY:-ghcr.io}/${DEPLOY_IMAGE_PREFIX:-manho/fusionxpay}-admin-service:${DEPLOY_IMAGE_TAG:-latest}
     container_name: fusionxpay-admin-service
     hostname: admin-service
     mem_limit: 512m

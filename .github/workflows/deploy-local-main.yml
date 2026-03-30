@@ -4,8 +4,10 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - "pom.xml"
       - "services/**"
       - "common/**"
+      - "**/Dockerfile"
       - "docker-compose.always-on.yml"
       - ".env.always-on.example"
       - "scripts/deploy-always-on.sh"
@@ -13,20 +15,12 @@ on:
       - "scripts/deploy-local-main.sh"
       - "scripts/mark-successful-sha.sh"
       - "scripts/rollback-local-main.sh"
+      - "docs/deployment/**"
+      - ".github/workflows/docker-build.yml"
       - ".github/workflows/deploy-local-main.yml"
-  push:
-    branches: [main]
-    paths:
-      - "services/**"
-      - "common/**"
-      - "docker-compose.always-on.yml"
-      - ".env.always-on.example"
-      - "scripts/deploy-always-on.sh"
-      - "scripts/check-always-on-health.sh"
-      - "scripts/deploy-local-main.sh"
-      - "scripts/mark-successful-sha.sh"
-      - "scripts/rollback-local-main.sh"
-      - ".github/workflows/deploy-local-main.yml"
+  workflow_run:
+    workflows: ["Docker Build & Push"]
+    types: [completed]
   workflow_dispatch:
 
 jobs:
@@ -50,8 +44,18 @@ jobs:
           docker compose --env-file .env.always-on.example -f docker-compose.always-on.yml config >/dev/null
 
   deploy:
-    if: github.event_name != 'pull_request'
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event_name == 'workflow_run' &&
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_branch == 'main'
+      )
     runs-on: [self-hosted, linux]
+    permissions:
+      contents: read
+      packages: read
     concurrency:
       group: fusionxpay-main-deploy
       cancel-in-progress: false
@@ -60,6 +64,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Verify runtime env file exists
         run: |
@@ -67,6 +79,11 @@ jobs:
             echo "::error title=Missing env file::~/.fusionxpay/.env.always-on not found on self-hosted runner"
             exit 1
           fi
+
+      - name: Show deployment target
+        run: |
+          echo "Deploying ref: $(git rev-parse HEAD)"
+          echo "Deploying image tag: $(git rev-parse --short=7 HEAD)"
 
       - name: Deploy latest revision
         run: ./scripts/deploy-local-main.sh "$HOME/.fusionxpay/.env.always-on"

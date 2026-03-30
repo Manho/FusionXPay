@@ -27,6 +27,14 @@ This deployment profile is designed for a long-running demo environment on an 8G
 ./scripts/deploy-always-on.sh ./.env.always-on
 ```
 
+This profile now deploys published GHCR images instead of rebuilding services locally.
+By default the script uses the checked-out commit SHA as `DEPLOY_IMAGE_TAG`.
+Override it only when you need to redeploy a different published revision:
+
+```bash
+DEPLOY_IMAGE_TAG=<sha-tag> ./scripts/deploy-always-on.sh ./.env.always-on
+```
+
 ## 3. Verify Health
 
 ```bash
@@ -62,6 +70,7 @@ docker compose --env-file ./.env.always-on -f docker-compose.always-on.yml down
 ## Notes
 
 - This profile intentionally keeps logging at INFO level for long-running low-resource operation.
+- Ensure the selected `DEPLOY_IMAGE_TAG` has already been published by `Docker Build & Push`.
 - If any service needs temporary diagnostics, raise log level briefly and revert to INFO.
 - Local monitoring and backup runbook:
   - `docs/operations/local-observability-backup.md`
