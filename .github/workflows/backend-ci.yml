@@ -1,8 +1,18 @@
-name: Backend CI (PR)
+name: Backend CI (PR & Feature Push)
 
 on:
+  push:
+    branches:
+      - 'feature/**'
+      - 'fix/**'
+      - 'hotfix/**'
+    paths:
+      - 'services/**'
+      - 'common/**'
+      - 'pom.xml'
+      - '.github/workflows/backend-ci*.yml'
   pull_request:
-    branches: [main, feature/*]
+    branches: [main, 'feature/**']
     paths:
       - 'services/**'
       - 'common/**'
