@@ -17,9 +17,8 @@
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
         <lombok.version>1.18.36</lombok.version>
-        <junit.jupiter.version>5.9.3</junit.jupiter.version>
-        <spring-boot.version>3.1.2</spring-boot.version>
-        <spring-cloud.version>2022.0.3</spring-cloud.version>
+        <spring-boot.version>3.5.13</spring-boot.version>
+        <spring-cloud.version>2025.0.1</spring-cloud.version>
         <common-module.version>1.0.0</common-module.version>
     </properties>
 
@@ -59,8 +58,8 @@
         </dependency>
         <!-- MySQL Connector for runtime -->
         <dependency>
-            <groupId>mysql</groupId>
-            <artifactId>mysql-connector-java</artifactId>
+            <groupId>com.mysql</groupId>
+            <artifactId>mysql-connector-j</artifactId>
             <version>8.0.33</version>
             <scope>runtime</scope>
         </dependency>
@@ -81,13 +80,6 @@
             <groupId>com.fusionxpay</groupId>
             <artifactId>common</artifactId>
             <version>${common-module.version}</version>
-        </dependency>
-        <!-- JUnit 5 for testing -->
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter</artifactId>
-            <version>${junit.jupiter.version}</version>
-            <scope>test</scope>
         </dependency>
         <!-- Spring Boot Starter Test for integration testing -->
         <dependency>
@@ -158,6 +150,7 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <version>${spring-boot.version}</version>
                 <executions>
                     <execution>
                         <goals>
@@ -170,7 +163,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
-                <version>2.22.2</version>
+                <version>3.5.5</version>
                 <configuration>
                     <includes>
                         <include>**/*Test.java</include>
@@ -198,7 +191,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-failsafe-plugin</artifactId>
-                <version>3.2.2</version>
+                <version>3.5.5</version>
                 <configuration>
                     <classesDirectory>${project.build.outputDirectory}</classesDirectory>
                 </configuration>
