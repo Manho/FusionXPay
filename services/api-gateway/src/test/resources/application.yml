@@ -7,9 +7,9 @@ spring:
   main:
     web-application-type: reactive
   datasource:
-    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:fusionxpay_db}?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC
-    username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:root}
+    url: jdbc:mysql://${TEST_DB_HOST:localhost}:${TEST_DB_PORT:3306}/${TEST_DB_NAME:fusionxpay_db}?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC
+    username: ${TEST_DB_USERNAME:root}
+    password: ${TEST_DB_PASSWORD:root}
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
@@ -17,7 +17,7 @@ spring:
     show-sql: true
   data:
     redis:
-      host: ${REDIS_HOST:192.168.50.225}
+      host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
   cloud:
     gateway:
@@ -129,7 +129,7 @@ spring:
 eureka:
   client:
     service-url:
-      defaultZone: ${EUREKA_URL:http://192.168.50.225:8761/eureka}
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka}
   instance:
     prefer-ip-address: true
 
