@@ -1,5 +1,7 @@
 spring:
   main:
+    banner-mode: off
+    log-startup-info: false
     web-application-type: none
   ai:
     mcp:

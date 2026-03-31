@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -60,6 +61,21 @@ class ToolAspectOrderTest {
 
             assertThat(observer.stages).containsExactly("input:sample_tool", "audit:sample_tool", "output:sample_tool");
             assertThat(payload.secret()).isEqualTo("[REDACTED]");
+        });
+    }
+
+    @Test
+    void shouldAllowJsonLikeQuotedInputWithinThreshold() {
+        contextRunner.run(context -> {
+            SampleToolTarget target = new SampleToolTarget();
+
+            AspectJProxyFactory proxyFactory = new AspectJProxyFactory(target);
+            proxyFactory.addAspect(context.getBean(InputSafetyAspect.class));
+
+            SampleToolTarget proxy = (SampleToolTarget) proxyFactory.getProxy();
+
+            assertThatCode(() -> proxy.sampleTool("[\"A\",\"B\"]"))
+                    .doesNotThrowAnyException();
         });
     }
 

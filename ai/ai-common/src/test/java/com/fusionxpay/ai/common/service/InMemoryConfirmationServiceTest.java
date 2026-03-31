@@ -73,4 +73,26 @@ class InMemoryConfirmationServiceTest {
         assertThat(result.getAction()).isNotNull();
         assertThat(result.getAction().getStatus()).isEqualTo(ConfirmationStatus.EXPIRED);
     }
+
+    @Test
+    void shouldCleanupExpiredActionsWithoutExplicitConsume() throws InterruptedException {
+        ConfirmationProperties properties = new ConfirmationProperties();
+        properties.setTtl(Duration.ofMillis(5));
+        InMemoryConfirmationService confirmationService = new InMemoryConfirmationService(properties);
+
+        PendingConfirmationAction action = confirmationService.create(
+                11L,
+                ConfirmationOperationType.INITIATE_PAYMENT,
+                "Initiate payment",
+                Map.of("orderId", "123")
+        );
+
+        Thread.sleep(15);
+        confirmationService.cleanupExpiredActions();
+
+        ConfirmationLookupResult result = confirmationService.consume(action.getToken(), 11L);
+
+        assertThat(result.getStatus()).isEqualTo(ConfirmationLookupStatus.NOT_FOUND);
+        assertThat(result.getAction()).isNull();
+    }
 }

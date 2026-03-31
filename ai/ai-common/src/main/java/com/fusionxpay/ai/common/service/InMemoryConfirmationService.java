@@ -4,6 +4,7 @@ import com.fusionxpay.ai.common.config.ConfirmationProperties;
 import com.fusionxpay.ai.common.dto.confirmation.ConfirmationOperationType;
 import com.fusionxpay.ai.common.dto.confirmation.ConfirmationStatus;
 import com.fusionxpay.ai.common.dto.confirmation.PendingConfirmationAction;
+import org.springframework.scheduling.annotation.Scheduled;
 
 import java.time.Instant;
 import java.util.Map;
@@ -25,6 +26,7 @@ public class InMemoryConfirmationService implements ConfirmationService {
                                             ConfirmationOperationType operationType,
                                             String summary,
                                             Map<String, Object> payload) {
+        cleanupExpiredActions();
         Instant expiresAt = Instant.now().plus(confirmationProperties.getTtl());
         PendingConfirmationAction action = PendingConfirmationAction.builder()
                 .token(UUID.randomUUID().toString())
@@ -58,5 +60,11 @@ public class InMemoryConfirmationService implements ConfirmationService {
 
         action.setStatus(ConfirmationStatus.CONFIRMED);
         return ConfirmationLookupResult.of(ConfirmationLookupStatus.READY, action);
+    }
+
+    @Scheduled(fixedDelayString = "${fusionx.ai.confirmation.cleanup-interval:60000}")
+    public void cleanupExpiredActions() {
+        Instant now = Instant.now();
+        pendingActions.entrySet().removeIf(entry -> entry.getValue().getExpiresAt().isBefore(now));
     }
 }

@@ -64,7 +64,7 @@ public class InputSafetyAspect {
         long suspiciousCharacters = payload.chars()
                 .filter(ch -> !Character.isLetterOrDigit(ch)
                         && !Character.isWhitespace(ch)
-                        && "{}[](),.:;_-/@".indexOf(ch) < 0)
+                        && "{}[](),.:;_-/@\"'".indexOf(ch) < 0)
                 .count();
         return (double) suspiciousCharacters / (double) payload.length();
     }
