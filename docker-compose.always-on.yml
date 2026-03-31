@@ -38,6 +38,7 @@ services:
         -XX:MaxRAMPercentage=70
         -Xms128m
         -Xmx256m
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       ORDER_SERVICE_URL: ${ORDER_SERVICE_URL:-http://order-service:8082}
       PAYMENT_SERVICE_URL: ${PAYMENT_SERVICE_URL:-http://payment-service:8081}
       NOTIFICATION_SERVICE_URL: ${NOTIFICATION_SERVICE_URL:-http://notification-service:8083}
