@@ -1,0 +1,10 @@
+spring:
+  main:
+    web-application-type: none
+
+fusionx:
+  ai:
+    gateway:
+      base-url: ${FUSIONX_GATEWAY_BASE_URL:http://localhost:8080}
+    cli:
+      config-path: ${FUSIONX_CONFIG_PATH:${user.home}/.fusionx/config.json}

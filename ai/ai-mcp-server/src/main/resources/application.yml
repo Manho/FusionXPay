@@ -1,0 +1,20 @@
+spring:
+  main:
+    web-application-type: none
+  ai:
+    mcp:
+      server:
+        name: fusionxpay-mcp
+        version: 1.0.0
+        instructions: Merchant-scoped FusionXPay MCP server for payments and orders.
+        stdio: false
+        capabilities:
+          prompt: false
+          resource: false
+          completion: false
+          tool: true
+
+fusionx:
+  ai:
+    gateway:
+      base-url: ${FUSIONX_GATEWAY_BASE_URL:http://localhost:8080}
