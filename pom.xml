@@ -28,6 +28,7 @@
         <spring-cloud.version>2025.0.1</spring-cloud.version>
         <spring-ai.version>1.0.0</spring-ai.version>
         <picocli.version>4.7.7</picocli.version>
+        <skipUnitTests>false</skipUnitTests>
         <common-module.version>1.0.0</common-module.version> 
     </properties>
 
@@ -88,6 +89,9 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>3.2.2</version>
+                    <configuration>
+                        <skipTests>${skipUnitTests}</skipTests>
+                    </configuration>
                 </plugin>
                 <plugin>
                     <groupId>org.owasp</groupId>

@@ -153,6 +153,7 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.5.5</version>
                 <configuration>
+                    <skipTests>${skipUnitTests}</skipTests>
                     <includes>
                         <include>**/*Test.java</include>
                     </includes>

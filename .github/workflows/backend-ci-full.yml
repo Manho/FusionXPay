@@ -69,11 +69,8 @@ jobs:
           SPRING_REDIS_HOST: localhost
           SPRING_REDIS_PORT: 6379
 
-      - name: Install common module for integration tests
-        run: mvn install -B -DskipTests -pl common
-
       - name: Run all integration tests
-        run: mvn failsafe:integration-test failsafe:verify -B
+        run: mvn verify -B -DskipUnitTests=true
         env:
           SPRING_DATASOURCE_URL: jdbc:mysql://localhost:3306/fusionxpay_test
           SPRING_DATASOURCE_USERNAME: root

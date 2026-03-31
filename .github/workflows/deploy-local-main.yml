@@ -7,6 +7,7 @@ on:
       - "pom.xml"
       - "services/**"
       - "common/**"
+      - "ai/**"
       - "**/Dockerfile"
       - "docker-compose.always-on.yml"
       - ".env.always-on.example"
@@ -16,10 +17,11 @@ on:
       - "scripts/mark-successful-sha.sh"
       - "scripts/rollback-local-main.sh"
       - "docs/deployment/**"
+      - ".github/workflows/backend-ci-full.yml"
       - ".github/workflows/docker-build.yml"
       - ".github/workflows/deploy-local-main.yml"
   workflow_run:
-    workflows: ["Docker Build & Push"]
+    workflows: ["Backend CI Full (Main/Nightly)"]
     types: [completed]
   workflow_dispatch:
 
@@ -54,6 +56,7 @@ jobs:
       )
     runs-on: [self-hosted, linux]
     permissions:
+      actions: read
       contents: read
       packages: read
     concurrency:
@@ -84,6 +87,53 @@ jobs:
         run: |
           echo "Deploying ref: $(git rev-parse HEAD)"
           echo "Deploying image tag: $(git rev-parse --short=7 HEAD)"
+
+      - name: Wait for Docker build workflow to succeed
+        if: github.event_name == 'workflow_run'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const targetSha = context.payload.workflow_run.head_sha;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const workflowName = 'Docker Build & Push';
+            const timeoutMs = 15 * 60 * 1000;
+            const pollMs = 15 * 1000;
+            const deadline = Date.now() + timeoutMs;
+
+            async function findMatchingRun() {
+              const response = await github.rest.actions.listWorkflowRunsForRepo({
+                owner,
+                repo,
+                event: 'push',
+                branch: 'main',
+                per_page: 100
+              });
+
+              return response.data.workflow_runs.find((run) =>
+                run.name === workflowName && run.head_sha === targetSha
+              );
+            }
+
+            while (Date.now() < deadline) {
+              const run = await findMatchingRun();
+
+              if (!run) {
+                core.info(`Waiting for ${workflowName} run for ${targetSha} to appear...`);
+              } else if (run.status !== 'completed') {
+                core.info(`Waiting for ${workflowName} run ${run.id}: status=${run.status}`);
+              } else if (run.conclusion !== 'success') {
+                core.setFailed(`${workflowName} for ${targetSha} finished with conclusion=${run.conclusion}`);
+                return;
+              } else {
+                core.info(`${workflowName} run ${run.id} succeeded for ${targetSha}`);
+                return;
+              }
+
+              await new Promise((resolve) => setTimeout(resolve, pollMs));
+            }
+
+            core.setFailed(`Timed out waiting for ${workflowName} success for ${targetSha}`);
 
       - name: Deploy latest revision
         run: ./scripts/deploy-local-main.sh "$HOME/.fusionxpay/.env.always-on"
