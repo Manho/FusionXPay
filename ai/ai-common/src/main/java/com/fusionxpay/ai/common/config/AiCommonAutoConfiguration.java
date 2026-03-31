@@ -6,6 +6,8 @@ import com.fusionxpay.ai.common.audit.AuditEventPublisher;
 import com.fusionxpay.ai.common.audit.KafkaAuditEventPublisher;
 import com.fusionxpay.ai.common.audit.NoopAuditEventPublisher;
 import com.fusionxpay.ai.common.client.GatewayClient;
+import com.fusionxpay.ai.common.service.ConfirmationService;
+import com.fusionxpay.ai.common.service.InMemoryConfirmationService;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -25,7 +27,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 @AutoConfiguration
-@EnableConfigurationProperties({FusionXGatewayProperties.class, AuditProperties.class})
+@EnableConfigurationProperties({FusionXGatewayProperties.class, AuditProperties.class, ConfirmationProperties.class})
 public class AiCommonAutoConfiguration {
 
     @Bean
@@ -78,5 +80,11 @@ public class AiCommonAutoConfiguration {
     @ConditionalOnProperty(prefix = "fusionx.ai.audit", name = "enabled", havingValue = "false")
     AuditEventPublisher noopAuditEventPublisher() {
         return new NoopAuditEventPublisher();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    ConfirmationService confirmationService(ConfirmationProperties confirmationProperties) {
+        return new InMemoryConfirmationService(confirmationProperties);
     }
 }

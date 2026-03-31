@@ -6,18 +6,16 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
-import java.util.Map;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class PendingConfirmationAction {
-    private String token;
-    private Long merchantId;
-    private ConfirmationOperationType operationType;
+public class ConfirmationResponse {
     private ConfirmationStatus status;
+    private String token;
+    private ConfirmationOperationType operationType;
     private String summary;
     private Instant expiresAt;
-    private Map<String, Object> payload;
+    private Object result;
 }

@@ -7,7 +7,7 @@ spring:
         name: fusionxpay-mcp
         version: 1.0.0
         instructions: Merchant-scoped FusionXPay MCP server for payments and orders.
-        stdio: false
+        stdio: true
         capabilities:
           prompt: false
           resource: false
@@ -18,3 +18,14 @@ fusionx:
   ai:
     gateway:
       base-url: ${FUSIONX_GATEWAY_BASE_URL:http://localhost:8080}
+    confirmation:
+      ttl: ${FUSIONX_CONFIRMATION_TTL:10m}
+    mcp:
+      auth:
+        jwt-token: ${FUSIONX_JWT_TOKEN:}
+        email: ${FUSIONX_EMAIL:}
+        password: ${FUSIONX_PASSWORD:}
+      safety:
+        max-input-length: ${FUSIONX_MCP_MAX_INPUT_LENGTH:4000}
+        suspicious-character-ratio: ${FUSIONX_MCP_SUSPICIOUS_RATIO:0.35}
+        max-summary-length: ${FUSIONX_MCP_MAX_SUMMARY_LENGTH:600}
