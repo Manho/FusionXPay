@@ -20,6 +20,8 @@ spring:
 
 fusionx:
   ai:
+    audit:
+      reliable: ${FUSIONX_AI_AUDIT_RELIABLE:false}
     gateway:
       base-url: ${FUSIONX_GATEWAY_BASE_URL:http://localhost:8080}
     confirmation:

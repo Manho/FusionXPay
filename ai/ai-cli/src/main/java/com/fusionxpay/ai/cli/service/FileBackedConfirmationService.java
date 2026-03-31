@@ -30,7 +30,6 @@ public class FileBackedConfirmationService implements ConfirmationService {
                                                          ConfirmationOperationType operationType,
                                                          String summary,
                                                          Map<String, Object> payload) {
-        CliStoredConfig config = configStore.loadOrCreate();
         Instant expiresAt = Instant.now().plus(confirmationProperties.getTtl());
         PendingConfirmationAction action = PendingConfirmationAction.builder()
                 .token(UUID.randomUUID().toString())
@@ -42,33 +41,33 @@ public class FileBackedConfirmationService implements ConfirmationService {
                 .payload(new LinkedHashMap<>(payload))
                 .build();
 
-        config.getPendingConfirmations().put(action.getToken(), action);
-        configStore.save(config);
+        // CLI confirmation state is file-backed so `pay/refund` and `confirm` can run in different shell processes.
+        configStore.mutate(config -> {
+            config.getPendingConfirmations().put(action.getToken(), action);
+        });
         return action;
     }
 
     @Override
     public synchronized ConfirmationLookupResult consume(String token, Long merchantId) {
-        CliStoredConfig config = configStore.loadOrCreate();
-        PendingConfirmationAction action = config.getPendingConfirmations().remove(token);
-        configStore.save(config);
+        return configStore.mutatePreservingExpiredConfirmations(config -> {
+            PendingConfirmationAction action = config.getPendingConfirmations().get(token);
+            if (action == null) {
+                return ConfirmationLookupResult.of(ConfirmationLookupStatus.NOT_FOUND, null);
+            }
 
-        if (action == null) {
-            return ConfirmationLookupResult.of(ConfirmationLookupStatus.NOT_FOUND, null);
-        }
+            if (!action.getMerchantId().equals(merchantId)) {
+                return ConfirmationLookupResult.of(ConfirmationLookupStatus.FORBIDDEN, action);
+            }
 
-        if (!action.getMerchantId().equals(merchantId)) {
-            config.getPendingConfirmations().put(token, action);
-            configStore.save(config);
-            return ConfirmationLookupResult.of(ConfirmationLookupStatus.FORBIDDEN, action);
-        }
+            config.getPendingConfirmations().remove(token);
+            if (action.getExpiresAt().isBefore(Instant.now())) {
+                action.setStatus(ConfirmationStatus.EXPIRED);
+                return ConfirmationLookupResult.of(ConfirmationLookupStatus.EXPIRED, action);
+            }
 
-        if (action.getExpiresAt().isBefore(Instant.now())) {
-            action.setStatus(ConfirmationStatus.EXPIRED);
-            return ConfirmationLookupResult.of(ConfirmationLookupStatus.EXPIRED, action);
-        }
-
-        action.setStatus(ConfirmationStatus.CONFIRMED);
-        return ConfirmationLookupResult.of(ConfirmationLookupStatus.READY, action);
+            action.setStatus(ConfirmationStatus.CONFIRMED);
+            return ConfirmationLookupResult.of(ConfirmationLookupStatus.READY, action);
+        });
     }
 }

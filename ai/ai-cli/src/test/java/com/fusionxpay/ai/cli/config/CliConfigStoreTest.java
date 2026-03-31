@@ -10,7 +10,15 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -56,5 +64,66 @@ class CliConfigStoreTest {
         assertThat(saved.getMerchantEmail()).isNull();
         assertThat(saved.getMerchantId()).isNull();
         assertThat(saved.getPendingConfirmations()).isEmpty();
+    }
+
+    @Test
+    void concurrentWritersKeepConfigFileReadable() throws Exception {
+        Path configPath = tempDir.resolve("config.json");
+        ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
+
+        CliProperties firstProperties = new CliProperties();
+        firstProperties.setConfigPath(configPath);
+        CliProperties secondProperties = new CliProperties();
+        secondProperties.setConfigPath(configPath);
+
+        CliConfigStore firstStore = new CliConfigStore(firstProperties, objectMapper);
+        CliConfigStore secondStore = new CliConfigStore(secondProperties, objectMapper);
+
+        CountDownLatch startLatch = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            List<Callable<Void>> tasks = new ArrayList<>();
+            tasks.add(() -> {
+                startLatch.await();
+                for (int i = 0; i < 20; i++) {
+                    firstStore.save(CliStoredConfig.builder()
+                            .baseUrl("https://api.fusionx.fun")
+                            .merchantEmail("first-" + i + "@example.com")
+                            .merchantId(1L)
+                            .build());
+                }
+                return null;
+            });
+            tasks.add(() -> {
+                startLatch.await();
+                for (int i = 0; i < 20; i++) {
+                    secondStore.save(CliStoredConfig.builder()
+                            .baseUrl("https://api.fusionx.fun")
+                            .merchantEmail("second-" + i + "@example.com")
+                            .merchantId(2L)
+                            .build());
+                }
+                return null;
+            });
+
+            List<Future<Void>> futures = new ArrayList<>();
+            for (Callable<Void> task : tasks) {
+                futures.add(executor.submit(task));
+            }
+            startLatch.countDown();
+            for (Future<Void> future : futures) {
+                future.get(10, TimeUnit.SECONDS);
+            }
+        } finally {
+            executor.shutdownNow();
+        }
+
+        CliStoredConfig storedConfig = objectMapper.readValue(configPath.toFile(), CliStoredConfig.class);
+        assertThat(storedConfig.getBaseUrl()).isEqualTo("https://api.fusionx.fun");
+        assertThat(storedConfig.getMerchantEmail()).isIn(
+                "first-19@example.com",
+                "second-19@example.com"
+        );
+        assertThat(storedConfig.getMerchantId()).isIn(1L, 2L);
     }
 }

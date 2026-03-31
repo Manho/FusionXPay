@@ -70,44 +70,77 @@ for container in "${CORE_CONTAINERS[@]}"; do
 done
 
 echo "[INFO] Running authenticated gateway smoke checks"
-SMOKE_EMAIL="alwayson-smoke-$(date +%s)@fusionxpay.test"
-SMOKE_PASSWORD="SmokePass123!"
-REGISTER_MAX_RETRIES=12
-REGISTER_HTTP_STATUS=""
-for ((i=1; i<=REGISTER_MAX_RETRIES; i++)); do
-  REGISTER_HTTP_STATUS="$(curl -sS -o /tmp/fusionxpay-alwayson-register-smoke.out -w '%{http_code}' \
+SMOKE_EMAIL="${ALWAYS_ON_SMOKE_EMAIL:-alwayson-smoke@fusionxpay.test}"
+SMOKE_PASSWORD="${ALWAYS_ON_SMOKE_PASSWORD:-SmokePass123!}"
+SMOKE_MERCHANT_NAME="${ALWAYS_ON_SMOKE_MERCHANT_NAME:-Always On Smoke Test}"
+AUTH_MAX_RETRIES=12
+SMOKE_TOKEN=""
+
+extract_token() {
+  python3 -c '
+import json, sys
+data = json.load(sys.stdin)
+print(data.get("token", ""))
+' 
+}
+
+login_smoke_account() {
+  curl -sS -o /tmp/fusionxpay-alwayson-login-smoke.out -w '%{http_code}' \
+    -X POST "${GATEWAY_BASE_URL}/api/v1/admin/auth/login" \
+    -H 'Content-Type: application/json' \
+    -d "{
+      \"email\":\"${SMOKE_EMAIL}\",
+      \"password\":\"${SMOKE_PASSWORD}\"
+    }"
+}
+
+register_smoke_account() {
+  curl -sS -o /tmp/fusionxpay-alwayson-register-smoke.out -w '%{http_code}' \
     -X POST "${GATEWAY_BASE_URL}/api/v1/admin/auth/register" \
     -H 'Content-Type: application/json' \
     -d "{
       \"email\":\"${SMOKE_EMAIL}\",
       \"password\":\"${SMOKE_PASSWORD}\",
-      \"merchantName\":\"Always On Smoke Test\"
-    }")"
+      \"merchantName\":\"${SMOKE_MERCHANT_NAME}\"
+    }"
+}
 
-  if [[ "${REGISTER_HTTP_STATUS}" == "200" ]]; then
+for ((i=1; i<=AUTH_MAX_RETRIES; i++)); do
+  LOGIN_HTTP_STATUS="$(login_smoke_account)"
+  if [[ "${LOGIN_HTTP_STATUS}" == "200" ]]; then
+    SMOKE_TOKEN="$(cat /tmp/fusionxpay-alwayson-login-smoke.out | extract_token)"
     break
   fi
 
-  if [[ "${i}" -eq "${REGISTER_MAX_RETRIES}" ]]; then
-    echo "[ERROR] Authenticated register smoke check failed with status ${REGISTER_HTTP_STATUS}."
-    cat /tmp/fusionxpay-alwayson-register-smoke.out
+  REGISTER_HTTP_STATUS="$(register_smoke_account)"
+  if [[ "${REGISTER_HTTP_STATUS}" == "200" ]]; then
+    SMOKE_TOKEN="$(cat /tmp/fusionxpay-alwayson-register-smoke.out | extract_token)"
+    break
+  fi
+
+  if [[ "${REGISTER_HTTP_STATUS}" == "409" || "${REGISTER_HTTP_STATUS}" == "400" ]]; then
+    LOGIN_HTTP_STATUS="$(login_smoke_account)"
+    if [[ "${LOGIN_HTTP_STATUS}" == "200" ]]; then
+      SMOKE_TOKEN="$(cat /tmp/fusionxpay-alwayson-login-smoke.out | extract_token)"
+      break
+    fi
+  fi
+
+  if [[ "${i}" -eq "${AUTH_MAX_RETRIES}" ]]; then
+    echo "[ERROR] Failed to authenticate smoke account after ${AUTH_MAX_RETRIES} attempts."
+    echo "[ERROR] Last login status: ${LOGIN_HTTP_STATUS:-unknown}"
+    cat /tmp/fusionxpay-alwayson-login-smoke.out 2>/dev/null || true
+    echo "[ERROR] Last register status: ${REGISTER_HTTP_STATUS:-unknown}"
+    cat /tmp/fusionxpay-alwayson-register-smoke.out 2>/dev/null || true
     exit 1
   fi
 
-  echo "[WARN] Register smoke check returned status ${REGISTER_HTTP_STATUS}; retrying (${i}/${REGISTER_MAX_RETRIES})..."
+  echo "[WARN] Smoke account auth failed (login=${LOGIN_HTTP_STATUS:-n/a}, register=${REGISTER_HTTP_STATUS:-n/a}); retrying (${i}/${AUTH_MAX_RETRIES})..."
   sleep 5
 done
 
-REGISTER_RESPONSE="$(cat /tmp/fusionxpay-alwayson-register-smoke.out)"
-
-SMOKE_TOKEN="$(printf '%s' "${REGISTER_RESPONSE}" | python3 -c '
-import json, sys
-data = json.load(sys.stdin)
-print(data.get("token", ""))
-')"
-
 if [[ -z "${SMOKE_TOKEN}" ]]; then
-  echo "[ERROR] Failed to obtain JWT token from registration response."
+  echo "[ERROR] Failed to obtain JWT token for smoke account."
   exit 1
 fi
 
@@ -129,7 +162,7 @@ if [[ "${PAYMENT_PROVIDERS_STATUS}" != "200" ]]; then
   exit 1
 fi
 
-rm -f /tmp/fusionxpay-alwayson-register-smoke.out /tmp/fusionxpay-alwayson-orders-smoke.out /tmp/fusionxpay-alwayson-providers-smoke.out
+rm -f /tmp/fusionxpay-alwayson-login-smoke.out /tmp/fusionxpay-alwayson-register-smoke.out /tmp/fusionxpay-alwayson-orders-smoke.out /tmp/fusionxpay-alwayson-providers-smoke.out
 
 echo "[INFO] One-shot memory usage snapshot"
 docker stats --no-stream \

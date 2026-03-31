@@ -27,15 +27,19 @@ public class CliSessionService {
             merchant = gatewayClientProvider.clientFor(baseUrl).getCurrentMerchant(response.getToken());
         }
         validateMerchantRole(merchant);
+        GatewayMerchantInfo resolvedMerchant = merchant;
 
-        CliStoredConfig config = configStore.loadOrCreate();
-        config.setBaseUrl(baseUrl.toString());
-        config.setJwt(response.getToken());
-        config.setMerchantEmail(merchant.getEmail() == null || merchant.getEmail().isBlank() ? email : merchant.getEmail());
-        config.setMerchantId(merchant.getId());
-        config.setMerchantName(merchant.getMerchantName());
-        config.setMerchantRole(merchant.getRole());
-        configStore.save(config);
+        CliStoredConfig config = configStore.mutate(existing -> {
+            existing.setBaseUrl(baseUrl.toString());
+            existing.setJwt(response.getToken());
+            existing.setMerchantEmail(resolvedMerchant.getEmail() == null || resolvedMerchant.getEmail().isBlank()
+                    ? email
+                    : resolvedMerchant.getEmail());
+            existing.setMerchantId(resolvedMerchant.getId());
+            existing.setMerchantName(resolvedMerchant.getMerchantName());
+            existing.setMerchantRole(resolvedMerchant.getRole());
+            return existing;
+        });
 
         return new LoginResult(config, response.getExpiresIn());
     }
@@ -50,12 +54,14 @@ public class CliSessionService {
         try {
             GatewayMerchantInfo merchant = gatewayClientProvider.currentClient().getCurrentMerchant(config.getJwt());
             validateMerchantRole(merchant);
-            config.setMerchantEmail(merchant.getEmail());
-            config.setMerchantId(merchant.getId());
-            config.setMerchantName(merchant.getMerchantName());
-            config.setMerchantRole(merchant.getRole());
-            configStore.save(config);
-            return new StatusResult(true, config, true, null);
+            CliStoredConfig updatedConfig = configStore.mutate(existing -> {
+                existing.setMerchantEmail(merchant.getEmail());
+                existing.setMerchantId(merchant.getId());
+                existing.setMerchantName(merchant.getMerchantName());
+                existing.setMerchantRole(merchant.getRole());
+                return existing;
+            });
+            return new StatusResult(true, updatedConfig, true, null);
         } catch (RuntimeException ex) {
             return new StatusResult(true, config, false, ex.getMessage());
         }
