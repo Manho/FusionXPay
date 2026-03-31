@@ -14,13 +14,17 @@ public class KafkaAuditEventPublisher implements AuditEventPublisher {
 
     @Override
     public void publish(AuditEvent event) {
-        kafkaTemplate.send(auditProperties.getTopic(), event.getCorrelationId(), event)
-                .whenComplete((result, throwable) -> {
-                    if (throwable != null) {
-                        log.error("Failed to publish audit event {}", event.getEventId(), throwable);
-                        return;
-                    }
-                    log.debug("Published audit event {} to topic {}", event.getEventId(), auditProperties.getTopic());
-                });
+        try {
+            kafkaTemplate.send(auditProperties.getTopic(), event.getCorrelationId(), event)
+                    .whenComplete((result, throwable) -> {
+                        if (throwable != null) {
+                            log.warn("Failed to publish audit event {}", event.getEventId(), throwable);
+                            return;
+                        }
+                        log.debug("Published audit event {} to topic {}", event.getEventId(), auditProperties.getTopic());
+                    });
+        } catch (RuntimeException ex) {
+            log.warn("Failed to enqueue audit event {}", event.getEventId(), ex);
+        }
     }
 }

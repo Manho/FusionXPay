@@ -3,6 +3,8 @@ spring:
     banner-mode: off
     log-startup-info: false
     web-application-type: none
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
   ai:
     mcp:
       server:

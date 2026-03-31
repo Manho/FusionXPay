@@ -1,9 +1,20 @@
 spring:
   main:
+    banner-mode: off
+    log-startup-info: false
     web-application-type: none
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+
+logging:
+  level:
+    root: WARN
+    org.apache.kafka: WARN
 
 fusionx:
   ai:
+    audit:
+      enabled: ${FUSIONX_AI_AUDIT_ENABLED:false}
     gateway:
       base-url: ${FUSIONX_GATEWAY_BASE_URL:http://localhost:8080}
     cli:
