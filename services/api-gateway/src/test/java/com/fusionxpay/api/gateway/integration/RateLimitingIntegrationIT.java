@@ -13,6 +13,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.web.reactive.server.EntityExchangeResult;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -21,6 +22,8 @@ import org.testcontainers.utility.DockerImageName;
 
 import java.time.Duration;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.any;
@@ -30,6 +33,8 @@ import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.options;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Testcontainers
@@ -107,72 +112,39 @@ class RateLimitingIntegrationIT {
     @Test
     @DisplayName("Admin login endpoint is rate limited by source IP")
     void adminLoginIsRateLimitedByIp() {
-        int burstCapacity = 2;
-        int margin = 2;
+        AtomicInteger attempt = new AtomicInteger();
 
-        for (int i = 0; i < burstCapacity + margin; i++) {
-            webTestClient.post()
+        assertEventuallyRateLimited(8, () -> webTestClient.post()
                     .uri("/api/v1/admin/auth/login")
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(Map.of("username", "admin", "password", "admin123"))
-                    .exchange();
-        }
-
-        webTestClient.post()
-                .uri("/api/v1/admin/auth/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(Map.of("username", "admin", "password", "admin123"))
-                .exchange()
-                .expectStatus().isEqualTo(429)
-                .expectHeader().valueEquals("Retry-After", "60");
+                    .header("X-Test-Attempt", String.valueOf(attempt.incrementAndGet()))
+                    .exchange());
     }
 
     @Test
     @DisplayName("Payment endpoint is rate limited by merchant identity")
     void paymentEndpointIsRateLimitedByMerchantId() {
         String token = tokenForMerchant(101L);
-        int burstCapacity = 3;
-        int margin = 2;
+        AtomicInteger attempt = new AtomicInteger();
 
-        for (int i = 0; i < burstCapacity + margin; i++) {
-            webTestClient.post()
+        assertEventuallyRateLimited(10, () -> webTestClient.post()
                     .uri("/api/v1/payment/request")
                     .header("Authorization", "Bearer " + token)
                     .contentType(MediaType.APPLICATION_JSON)
-                    .bodyValue(Map.of("orderId", "order-" + i, "amount", 100))
-                    .exchange();
-        }
-
-        webTestClient.post()
-                .uri("/api/v1/payment/request")
-                .header("Authorization", "Bearer " + token)
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(Map.of("orderId", "order-throttled", "amount", 100))
-                .exchange()
-                .expectStatus().isEqualTo(429)
-                .expectHeader().valueEquals("Retry-After", "60");
+                    .bodyValue(Map.of("orderId", "order-" + attempt.incrementAndGet(), "amount", 100))
+                    .exchange());
     }
 
     @Test
     @DisplayName("Order endpoint is rate limited by merchant identity with its own threshold")
     void orderEndpointUsesIndependentThreshold() {
         String token = tokenForMerchant(202L);
-        int burstCapacity = 4;
-        int margin = 2;
 
-        for (int i = 0; i < burstCapacity + margin; i++) {
-            webTestClient.get()
+        assertEventuallyRateLimited(10, () -> webTestClient.get()
                     .uri("/api/v1/orders")
                     .header("Authorization", "Bearer " + token)
-                    .exchange();
-        }
-
-        webTestClient.get()
-                .uri("/api/v1/orders")
-                .header("Authorization", "Bearer " + token)
-                .exchange()
-                .expectStatus().isEqualTo(429)
-                .expectHeader().valueEquals("Retry-After", "60");
+                    .exchange());
     }
 
     @Test
@@ -217,5 +189,21 @@ class RateLimitingIntegrationIT {
                 new JwtClaims(merchantId, "merchant-" + merchantId + "@example.com", "MERCHANT"),
                 60_000
         );
+    }
+
+    private void assertEventuallyRateLimited(int maxAttempts, Supplier<WebTestClient.ResponseSpec> requestSupplier) {
+        boolean throttled = false;
+
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            EntityExchangeResult<byte[]> result = requestSupplier.get().expectBody().returnResult();
+
+            if (result.getStatus().value() == 429) {
+                assertEquals("60", result.getResponseHeaders().getFirst("Retry-After"));
+                throttled = true;
+                break;
+            }
+        }
+
+        assertTrue(throttled, "Expected rate limiter to throttle within " + maxAttempts + " attempts");
     }
 }

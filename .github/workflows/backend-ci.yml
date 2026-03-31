@@ -77,11 +77,8 @@ jobs:
           SPRING_REDIS_HOST: localhost
           SPRING_REDIS_PORT: 6379
 
-      - name: Install common module for integration tests
-        run: mvn install -B -DskipTests -pl common
-
       - name: Run smoke integration test
-        run: mvn verify -B -pl services/payment-service -am -Dit.test=PaymentFlowIT -Dfailsafe.failIfNoSpecifiedTests=false -DskipTests
+        run: mvn verify -B -pl services/payment-service -am -Dit.test=PaymentFlowIT -Dfailsafe.failIfNoSpecifiedTests=false -DskipUnitTests=true
         env:
           SPRING_DATASOURCE_URL: jdbc:mysql://localhost:3306/fusionxpay_test
           SPRING_DATASOURCE_USERNAME: root
@@ -90,7 +87,7 @@ jobs:
           SPRING_REDIS_PORT: 6379
 
       - name: Run API gateway critical integration tests
-        run: mvn verify -B -pl services/api-gateway -am -Dit.test=JwtAuthFlowIT,RateLimitingIntegrationIT -Dfailsafe.failIfNoSpecifiedTests=false -DskipTests
+        run: mvn verify -B -pl services/api-gateway -am -Dit.test=JwtAuthFlowIT,RateLimitingIntegrationIT -Dfailsafe.failIfNoSpecifiedTests=false -DskipUnitTests=true
         env:
           SPRING_DATASOURCE_URL: jdbc:mysql://localhost:3306/fusionxpay_test
           SPRING_DATASOURCE_USERNAME: root

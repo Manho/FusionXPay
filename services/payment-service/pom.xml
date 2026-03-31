@@ -186,6 +186,7 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.2.2</version>
                 <configuration>
+                    <skipTests>${skipUnitTests}</skipTests>
                     <!-- Allow Mockito/ByteBuddy to run on newer JDKs (e.g. JDK 23) in local dev. -->
                     <systemPropertyVariables>
                         <net.bytebuddy.experimental>true</net.bytebuddy.experimental>
