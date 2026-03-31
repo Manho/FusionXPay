@@ -10,7 +10,16 @@ on:
       - 'services/**'
       - '**/Dockerfile'
       - 'docker-compose*.yml'
+      - '.env.always-on.example'
+      - 'scripts/deploy-always-on.sh'
+      - 'scripts/check-always-on-health.sh'
+      - 'scripts/deploy-local-main.sh'
+      - 'scripts/mark-successful-sha.sh'
+      - 'scripts/rollback-local-main.sh'
+      - 'docs/deployment/**'
+      - '.github/workflows/backend-ci-full.yml'
       - '.github/workflows/docker-build.yml'
+      - '.github/workflows/deploy-local-main.yml'
   push:
     branches: [main]
     paths:
@@ -20,7 +29,16 @@ on:
       - 'services/**'
       - '**/Dockerfile'
       - 'docker-compose*.yml'
+      - '.env.always-on.example'
+      - 'scripts/deploy-always-on.sh'
+      - 'scripts/check-always-on-health.sh'
+      - 'scripts/deploy-local-main.sh'
+      - 'scripts/mark-successful-sha.sh'
+      - 'scripts/rollback-local-main.sh'
+      - 'docs/deployment/**'
+      - '.github/workflows/backend-ci-full.yml'
       - '.github/workflows/docker-build.yml'
+      - '.github/workflows/deploy-local-main.yml'
   workflow_dispatch:
 
 env:

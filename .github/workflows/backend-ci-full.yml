@@ -8,6 +8,17 @@ on:
       - 'common/**'
       - 'ai/**'
       - 'pom.xml'
+      - 'docker-compose.always-on.yml'
+      - '.env.always-on.example'
+      - 'scripts/deploy-always-on.sh'
+      - 'scripts/check-always-on-health.sh'
+      - 'scripts/deploy-local-main.sh'
+      - 'scripts/mark-successful-sha.sh'
+      - 'scripts/rollback-local-main.sh'
+      - 'docs/deployment/**'
+      - '.github/workflows/backend-ci-full.yml'
+      - '.github/workflows/docker-build.yml'
+      - '.github/workflows/deploy-local-main.yml'
   schedule:
     # Run nightly at 2 AM UTC
     - cron: '0 2 * * *'
