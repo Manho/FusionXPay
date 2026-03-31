@@ -5,6 +5,7 @@ WORKDIR /app
 # Copy entire project for proper multi-module build
 COPY pom.xml ./pom.xml
 COPY common ./common
+COPY ai ./ai
 COPY services ./services
 
 # Build common module first, then the target service

@@ -6,6 +6,7 @@ on:
     paths:
       - 'services/**'
       - 'common/**'
+      - 'ai/**'
       - 'pom.xml'
   schedule:
     # Run nightly at 2 AM UTC

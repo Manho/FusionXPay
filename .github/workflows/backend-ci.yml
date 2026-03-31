@@ -9,6 +9,7 @@ on:
     paths:
       - 'services/**'
       - 'common/**'
+      - 'ai/**'
       - 'pom.xml'
       - '.github/workflows/backend-ci*.yml'
   pull_request:
@@ -16,6 +17,7 @@ on:
     paths:
       - 'services/**'
       - 'common/**'
+      - 'ai/**'
       - 'pom.xml'
       - '.github/workflows/backend-ci*.yml'
 
