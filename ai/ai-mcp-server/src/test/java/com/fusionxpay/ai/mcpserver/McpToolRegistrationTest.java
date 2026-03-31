@@ -10,6 +10,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 
 import java.util.Arrays;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -48,5 +49,25 @@ class McpToolRegistrationTest {
                 "refund_payment",
                 "confirm_action"
         );
+    }
+
+    @Test
+    void shouldExposeNamedToolArgumentsForMcpClients() {
+        Optional<String> inputSchema = Arrays.stream(toolCallbackProvider.getToolCallbacks())
+                .map(ToolCallback::getToolDefinition)
+                .filter(toolDefinition -> "search_orders".equals(toolDefinition.name()))
+                .map(toolDefinition -> toolDefinition.inputSchema())
+                .findFirst();
+
+        assertThat(inputSchema).isPresent();
+        assertThat(inputSchema.orElseThrow())
+                .contains("\"status\"")
+                .contains("\"orderNumber\"")
+                .contains("\"from\"")
+                .contains("\"to\"")
+                .contains("\"page\"")
+                .contains("\"size\"")
+                .doesNotContain("\"arg0\"")
+                .doesNotContain("\"arg1\"");
     }
 }

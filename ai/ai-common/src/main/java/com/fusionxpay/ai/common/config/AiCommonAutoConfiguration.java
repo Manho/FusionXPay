@@ -56,6 +56,10 @@ public class AiCommonAutoConfiguration {
         Map<String, Object> properties = new HashMap<>(kafkaProperties.buildProducerProperties());
         properties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         properties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
+        // Keep audit publishing from blocking MCP/CLI tool execution when Kafka metadata is unavailable.
+        properties.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 1_000);
+        properties.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 2_000);
+        properties.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, 4_000);
         properties.put(JsonSerializer.ADD_TYPE_INFO_HEADERS, false);
         return new DefaultKafkaProducerFactory<>(properties);
     }
