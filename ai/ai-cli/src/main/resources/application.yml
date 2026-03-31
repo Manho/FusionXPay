@@ -1,9 +1,23 @@
 spring:
   main:
+    banner-mode: off
+    log-startup-info: false
     web-application-type: none
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+
+logging:
+  level:
+    root: WARN
+    org.apache.kafka: WARN
 
 fusionx:
   ai:
+    audit:
+      # CLI audit is intentionally disabled for Stage 6; Stage 7 will turn it on by default.
+      enabled: ${FUSIONX_AI_AUDIT_ENABLED:false}
+      reliable: ${FUSIONX_AI_AUDIT_RELIABLE:true}
+      send-timeout: ${FUSIONX_AI_AUDIT_SEND_TIMEOUT:1500ms}
     gateway:
       base-url: ${FUSIONX_GATEWAY_BASE_URL:http://localhost:8080}
     cli:

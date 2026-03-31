@@ -3,6 +3,8 @@ spring:
     banner-mode: off
     log-startup-info: false
     web-application-type: none
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
   ai:
     mcp:
       server:
@@ -18,6 +20,8 @@ spring:
 
 fusionx:
   ai:
+    audit:
+      reliable: ${FUSIONX_AI_AUDIT_RELIABLE:false}
     gateway:
       base-url: ${FUSIONX_GATEWAY_BASE_URL:http://localhost:8080}
     confirmation:

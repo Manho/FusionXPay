@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fusionxpay.ai.mcpserver.config.McpSafetyProperties;
 import com.fusionxpay.ai.mcpserver.tool.McpToolOperation;
 import com.fusionxpay.ai.mcpserver.tool.UnsafeToolInputException;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
@@ -16,18 +15,32 @@ import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 @Aspect
 @Component
 @Slf4j
 @Order(Ordered.HIGHEST_PRECEDENCE)
-@RequiredArgsConstructor
 public class InputSafetyAspect {
 
     private final ObjectMapper objectMapper;
     private final McpSafetyProperties safetyProperties;
     private final ObjectProvider<ToolAspectObserver> observerProvider;
+    private final List<Pattern> blockedPatterns;
+
+    public InputSafetyAspect(ObjectMapper objectMapper,
+                             McpSafetyProperties safetyProperties,
+                             ObjectProvider<ToolAspectObserver> observerProvider) {
+        this.objectMapper = objectMapper;
+        this.safetyProperties = safetyProperties;
+        this.observerProvider = observerProvider;
+        // Cache compiled patterns so each MCP call only performs matching work.
+        this.blockedPatterns = safetyProperties.getBlockedPatterns().stream()
+                .map(Pattern::compile)
+                .collect(Collectors.toUnmodifiableList());
+    }
 
     @Around("@annotation(com.fusionxpay.ai.mcpserver.tool.McpToolOperation)")
     public Object validate(ProceedingJoinPoint joinPoint) throws Throwable {
@@ -52,9 +65,7 @@ public class InputSafetyAspect {
     }
 
     private boolean containsBlockedPattern(String payload) {
-        return safetyProperties.getBlockedPatterns().stream()
-                .map(Pattern::compile)
-                .anyMatch(pattern -> pattern.matcher(payload).find());
+        return blockedPatterns.stream().anyMatch(pattern -> pattern.matcher(payload).find());
     }
 
     private double suspiciousCharacterRatio(String payload) {
