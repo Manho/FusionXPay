@@ -19,6 +19,34 @@ HEALTH_URL="http://localhost:${API_PORT}/actuator/health"
 GATEWAY_BASE_URL="http://localhost:${API_PORT}"
 MAX_RETRIES=30
 SLEEP_SECONDS=5
+CORE_CONTAINERS=(
+  fusionxpay-api-gateway
+  fusionxpay-admin-service
+  fusionxpay-order-service
+  fusionxpay-payment-service
+  fusionxpay-notification-service
+)
+
+wait_for_container_health() {
+  local container="$1"
+  local max_retries="$2"
+  local sleep_seconds="$3"
+  local status=""
+
+  echo "[INFO] Waiting for container health: ${container}"
+  for ((i=1; i<=max_retries; i++)); do
+    status="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}unknown{{end}}' "${container}" 2>/dev/null || true)"
+    if [[ "${status}" == "healthy" ]]; then
+      echo "[INFO] ${container} is healthy (attempt ${i}/${max_retries})"
+      return 0
+    fi
+    if [[ "${i}" -eq "${max_retries}" ]]; then
+      echo "[ERROR] ${container} did not become healthy. Last status: ${status:-missing}"
+      return 1
+    fi
+    sleep "${sleep_seconds}"
+  done
+}
 
 echo "[INFO] Waiting for gateway health: ${HEALTH_URL}"
 for ((i=1; i<=MAX_RETRIES; i++)); do
@@ -37,23 +65,38 @@ done
 echo "[INFO] Container status"
 docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" ps
 
+for container in "${CORE_CONTAINERS[@]}"; do
+  wait_for_container_health "${container}" 24 5
+done
+
 echo "[INFO] Running authenticated gateway smoke checks"
 SMOKE_EMAIL="alwayson-smoke-$(date +%s)@fusionxpay.test"
 SMOKE_PASSWORD="SmokePass123!"
-REGISTER_HTTP_STATUS="$(curl -sS -o /tmp/fusionxpay-alwayson-register-smoke.out -w '%{http_code}' \
-  -X POST "${GATEWAY_BASE_URL}/api/v1/admin/auth/register" \
-  -H 'Content-Type: application/json' \
-  -d "{
-    \"email\":\"${SMOKE_EMAIL}\",
-    \"password\":\"${SMOKE_PASSWORD}\",
-    \"merchantName\":\"Always On Smoke Test\"
-  }")"
+REGISTER_MAX_RETRIES=12
+REGISTER_HTTP_STATUS=""
+for ((i=1; i<=REGISTER_MAX_RETRIES; i++)); do
+  REGISTER_HTTP_STATUS="$(curl -sS -o /tmp/fusionxpay-alwayson-register-smoke.out -w '%{http_code}' \
+    -X POST "${GATEWAY_BASE_URL}/api/v1/admin/auth/register" \
+    -H 'Content-Type: application/json' \
+    -d "{
+      \"email\":\"${SMOKE_EMAIL}\",
+      \"password\":\"${SMOKE_PASSWORD}\",
+      \"merchantName\":\"Always On Smoke Test\"
+    }")"
 
-if [[ "${REGISTER_HTTP_STATUS}" != "200" ]]; then
-  echo "[ERROR] Authenticated register smoke check failed with status ${REGISTER_HTTP_STATUS}."
-  cat /tmp/fusionxpay-alwayson-register-smoke.out
-  exit 1
-fi
+  if [[ "${REGISTER_HTTP_STATUS}" == "200" ]]; then
+    break
+  fi
+
+  if [[ "${i}" -eq "${REGISTER_MAX_RETRIES}" ]]; then
+    echo "[ERROR] Authenticated register smoke check failed with status ${REGISTER_HTTP_STATUS}."
+    cat /tmp/fusionxpay-alwayson-register-smoke.out
+    exit 1
+  fi
+
+  echo "[WARN] Register smoke check returned status ${REGISTER_HTTP_STATUS}; retrying (${i}/${REGISTER_MAX_RETRIES})..."
+  sleep 5
+done
 
 REGISTER_RESPONSE="$(cat /tmp/fusionxpay-alwayson-register-smoke.out)"
 
