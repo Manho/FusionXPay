@@ -58,7 +58,7 @@ jobs:
           cache: 'maven'
 
       - name: Build service JAR
-        run: mvn package -B -pl services/${{ matrix.service }} -am -DskipTests
+        run: mvn package -B -pl services/${{ matrix.service }} -am -DskipTests -DskipUnitTests=true
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4.0.0

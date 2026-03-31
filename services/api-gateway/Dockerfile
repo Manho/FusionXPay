@@ -9,8 +9,8 @@ COPY ai ./ai
 COPY services ./services
 
 # Build common module first, then the target service
-RUN mvn install -pl common -am -DskipTests -q
-RUN mvn package -pl services/api-gateway -am -DskipTests -q
+RUN mvn install -pl common -am -DskipTests -DskipUnitTests=true -q
+RUN mvn package -pl services/api-gateway -am -DskipTests -DskipUnitTests=true -q
 
 # Stage 2: Runtime
 FROM eclipse-temurin:21-jre-alpine
