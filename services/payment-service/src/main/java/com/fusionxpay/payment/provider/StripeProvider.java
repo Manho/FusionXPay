@@ -41,6 +41,12 @@ public class StripeProvider implements PaymentProvider {
 
     @Value("${payment.providers.stripe.api-base-url:}")
     private String apiBaseUrl;
+
+    @Value("${payment.frontend.success-url:http://localhost:3000/payment/success}")
+    private String defaultSuccessUrl;
+
+    @Value("${payment.frontend.cancel-url:http://localhost:3000/payment/cancel}")
+    private String defaultCancelUrl;
     
     // Redis configuration for idempotency
     private final RedisTemplate<String, String> redisTemplate;
@@ -78,8 +84,8 @@ public class StripeProvider implements PaymentProvider {
             // Create checkout session
             SessionCreateParams params = SessionCreateParams.builder()
                     .setMode(SessionCreateParams.Mode.PAYMENT)
-                    .setSuccessUrl(paymentRequest.getReturnUrl())
-                    .setCancelUrl(paymentRequest.getCancelUrl())
+                    .setSuccessUrl(resolveSuccessUrl(paymentRequest))
+                    .setCancelUrl(resolveCancelUrl(paymentRequest))
                     .addLineItem(createLineItem(paymentRequest))
                     .setPaymentIntentData(
                             SessionCreateParams.PaymentIntentData.builder()
@@ -127,6 +133,27 @@ public class StripeProvider implements PaymentProvider {
                 )
                 .setQuantity(1L)
                 .build();
+    }
+
+    private String resolveSuccessUrl(PaymentRequest paymentRequest) {
+        if (hasText(paymentRequest.getSuccessUrl())) {
+            return paymentRequest.getSuccessUrl();
+        }
+        if (hasText(paymentRequest.getReturnUrl())) {
+            return paymentRequest.getReturnUrl();
+        }
+        return defaultSuccessUrl;
+    }
+
+    private String resolveCancelUrl(PaymentRequest paymentRequest) {
+        if (hasText(paymentRequest.getCancelUrl())) {
+            return paymentRequest.getCancelUrl();
+        }
+        return defaultCancelUrl;
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     @Override

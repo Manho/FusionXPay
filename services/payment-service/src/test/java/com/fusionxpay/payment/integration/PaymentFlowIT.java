@@ -81,6 +81,8 @@ public class PaymentFlowIT extends AbstractIntegrationTest {
         registry.add("payment.providers.stripe.api-base-url", () -> "http://localhost:" + WIREMOCK_PORT);
         registry.add("payment.providers.stripe.secret-key", () -> "sk_test_mock");
         registry.add("payment.providers.stripe.webhook-secret", () -> "whsec_test_mock");
+        registry.add("payment.frontend.success-url", () -> "https://fusionx.fun/payment/success");
+        registry.add("payment.frontend.cancel-url", () -> "https://fusionx.fun/payment/cancel");
 
         // Point Feign order-service client to WireMock (avoids Eureka lookup in tests)
         registry.add("spring.cloud.openfeign.client.config.order-service.url",
@@ -140,7 +142,47 @@ public class PaymentFlowIT extends AbstractIntegrationTest {
     }
 
     @Test
-    @Order(2)
+    @Order(1)
+    @DisplayName("Should use successUrl and default cancel URL for Stripe checkout")
+    void testInitiatePayment_UsesSuccessUrlAndDefaultCancelUrl() {
+        wireMockServer.stubFor(post(urlPathMatching("/v1/checkout/sessions"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"id\":\"cs_test_success_url\",\"url\":\"https://checkout.stripe.com/pay/cs_test_success_url\",\"payment_intent\":\"pi_test_success_url\"}")));
+
+        UUID orderId = UUID.randomUUID();
+        PaymentRequest request = PaymentRequest.builder()
+                .orderId(orderId)
+                .amount(new BigDecimal("10.00"))
+                .currency("USD")
+                .paymentChannel("STRIPE")
+                .description("CLI-compatible payment")
+                .successUrl("https://fusionx.fun/payment/success")
+                .build();
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("X-Merchant-Id", "1");
+        HttpEntity<PaymentRequest> requestEntity = new HttpEntity<>(request, headers);
+
+        ResponseEntity<PaymentResponse> response = restTemplate.exchange(
+                "/api/v1/payment/request",
+                HttpMethod.POST,
+                requestEntity,
+                PaymentResponse.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getStatus()).isIn(PaymentStatus.PROCESSING, PaymentStatus.INITIATED);
+
+        wireMockServer.verify(postRequestedFor(urlPathMatching("/v1/checkout/sessions"))
+                .withRequestBody(containing("success_url=https%3A%2F%2Ffusionx.fun%2Fpayment%2Fsuccess"))
+                .withRequestBody(containing("cancel_url=https%3A%2F%2Ffusionx.fun%2Fpayment%2Fcancel")));
+    }
+
+    @Test
+    @Order(3)
     @DisplayName("Should update payment status to SUCCESS after Stripe webhook callback")
     void testPaymentFlow_WebhookCallback_Success() {
         // Arrange - First create a payment transaction
@@ -200,7 +242,7 @@ public class PaymentFlowIT extends AbstractIntegrationTest {
     }
 
     @Test
-    @Order(3)
+    @Order(4)
     @DisplayName("Should handle payment failure webhook correctly")
     void testPaymentFlow_WebhookCallback_Failure() {
         // Arrange - Create a payment transaction
