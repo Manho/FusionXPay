@@ -39,6 +39,49 @@ public class StripeProviderTest {
         stripeProvider = new StripeProvider(redisTemplate, idempotencyService);
         ReflectionTestUtils.setField(stripeProvider, "apiKey", API_KEY);
         ReflectionTestUtils.setField(stripeProvider, "webhookSecret", WEBHOOK_SECRET);
+        ReflectionTestUtils.setField(stripeProvider, "defaultSuccessUrl", "https://fusionx.fun/payment/success");
+        ReflectionTestUtils.setField(stripeProvider, "defaultCancelUrl", "https://fusionx.fun/payment/cancel");
+    }
+
+    @Test
+    void testResolveSuccessUrl_PrefersExplicitSuccessUrl() {
+        var request = com.fusionxpay.payment.dto.PaymentRequest.builder()
+                .successUrl("https://merchant.example/success")
+                .returnUrl("https://merchant.example/return")
+                .build();
+
+        String result = ReflectionTestUtils.invokeMethod(stripeProvider, "resolveSuccessUrl", request);
+
+        assertEquals("https://merchant.example/success", result);
+    }
+
+    @Test
+    void testResolveSuccessUrl_FallsBackToReturnUrl() {
+        var request = com.fusionxpay.payment.dto.PaymentRequest.builder()
+                .returnUrl("https://merchant.example/return")
+                .build();
+
+        String result = ReflectionTestUtils.invokeMethod(stripeProvider, "resolveSuccessUrl", request);
+
+        assertEquals("https://merchant.example/return", result);
+    }
+
+    @Test
+    void testResolveSuccessUrl_FallsBackToConfiguredDefault() {
+        var request = com.fusionxpay.payment.dto.PaymentRequest.builder().build();
+
+        String result = ReflectionTestUtils.invokeMethod(stripeProvider, "resolveSuccessUrl", request);
+
+        assertEquals("https://fusionx.fun/payment/success", result);
+    }
+
+    @Test
+    void testResolveCancelUrl_FallsBackToConfiguredDefault() {
+        var request = com.fusionxpay.payment.dto.PaymentRequest.builder().build();
+
+        String result = ReflectionTestUtils.invokeMethod(stripeProvider, "resolveCancelUrl", request);
+
+        assertEquals("https://fusionx.fun/payment/cancel", result);
     }
 
     @Test
