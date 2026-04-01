@@ -21,6 +21,8 @@ spring:
 fusionx:
   ai:
     audit:
+      enabled: ${FUSIONX_AI_AUDIT_ENABLED:true}
+      topic: ${FUSIONX_AI_AUDIT_TOPIC:ai-audit-log}
       reliable: ${FUSIONX_AI_AUDIT_RELIABLE:false}
     gateway:
       base-url: ${FUSIONX_GATEWAY_BASE_URL:http://localhost:8080}

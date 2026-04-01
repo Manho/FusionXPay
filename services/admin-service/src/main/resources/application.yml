@@ -7,6 +7,8 @@ spring:
     name: admin-service
   lifecycle:
     timeout-per-shutdown-phase: 15s
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
   datasource:
     url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:fusionxpay_db}?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC
     username: ${DB_USERNAME:root}
@@ -60,6 +62,14 @@ logging:
     com.fusionxpay.admin: INFO
     org.springframework.web: INFO
     org.springframework.security: INFO
+
+fusionx:
+  ai:
+    audit:
+      enabled: false
+      topic: ${FUSIONX_AI_AUDIT_TOPIC:ai-audit-log}
+      consumer-group: ${FUSIONX_AI_AUDIT_CONSUMER_GROUP:admin-service-ai-audit}
+      consumer-enabled: ${FUSIONX_AI_AUDIT_CONSUMER_ENABLED:true}
 
 # OpenAPI
 springdoc:

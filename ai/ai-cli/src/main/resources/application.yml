@@ -14,8 +14,9 @@ logging:
 fusionx:
   ai:
     audit:
-      # CLI audit is intentionally disabled for Stage 6; Stage 7 will turn it on by default.
-      enabled: ${FUSIONX_AI_AUDIT_ENABLED:false}
+      # CLI audit is enabled by default from Stage 7 onward so CLI and MCP share one Kafka audit sink.
+      enabled: ${FUSIONX_AI_AUDIT_ENABLED:true}
+      topic: ${FUSIONX_AI_AUDIT_TOPIC:ai-audit-log}
       reliable: ${FUSIONX_AI_AUDIT_RELIABLE:true}
       send-timeout: ${FUSIONX_AI_AUDIT_SEND_TIMEOUT:1500ms}
     gateway:
