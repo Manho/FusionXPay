@@ -12,4 +12,6 @@ public class AiAuditConsumerProperties {
     private String group = "admin-service-ai-audit";
 
     private boolean enabled = true;
+
+    private String dltTopic = "ai-audit-log.DLT";
 }

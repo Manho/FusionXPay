@@ -15,7 +15,10 @@ import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.List;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -24,6 +27,8 @@ import java.util.stream.Collectors;
 @Slf4j
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class InputSafetyAspect {
+
+    private static final Pattern BASE64_SEGMENT_PATTERN = Pattern.compile("\\b[A-Za-z0-9+/_-]{24,512}={0,2}\\b");
 
     private final ObjectMapper objectMapper;
     private final McpSafetyProperties safetyProperties;
@@ -65,7 +70,53 @@ public class InputSafetyAspect {
     }
 
     private boolean containsBlockedPattern(String payload) {
-        return blockedPatterns.stream().anyMatch(pattern -> pattern.matcher(payload).find());
+        return blockedPatterns.stream().anyMatch(pattern -> pattern.matcher(payload).find())
+                || containsBlockedBase64Pattern(payload);
+    }
+
+    private boolean containsBlockedBase64Pattern(String payload) {
+        Matcher matcher = BASE64_SEGMENT_PATTERN.matcher(payload);
+        while (matcher.find()) {
+            String decodedSegment = decodeBase64Segment(matcher.group());
+            if (decodedSegment == null) {
+                continue;
+            }
+            boolean matched = blockedPatterns.stream().anyMatch(pattern -> pattern.matcher(decodedSegment).find());
+            if (matched) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String decodeBase64Segment(String encodedSegment) {
+        for (Base64.Decoder decoder : List.of(Base64.getDecoder(), Base64.getUrlDecoder())) {
+            try {
+                byte[] decoded = decoder.decode(padBase64(encodedSegment));
+                if (decoded.length == 0) {
+                    continue;
+                }
+                String text = new String(decoded, StandardCharsets.UTF_8);
+                long printableCharacters = text.chars()
+                        .filter(ch -> ch == '\n' || ch == '\r' || ch == '\t' || (ch >= 32 && ch <= 126))
+                        .count();
+                if ((double) printableCharacters / (double) text.length() < 0.85d) {
+                    continue;
+                }
+                return text;
+            } catch (IllegalArgumentException ignored) {
+                // Try the next decoder.
+            }
+        }
+        return null;
+    }
+
+    private String padBase64(String encodedSegment) {
+        int remainder = encodedSegment.length() % 4;
+        if (remainder == 0) {
+            return encodedSegment;
+        }
+        return encodedSegment + "=".repeat(4 - remainder);
     }
 
     private double suspiciousCharacterRatio(String payload) {

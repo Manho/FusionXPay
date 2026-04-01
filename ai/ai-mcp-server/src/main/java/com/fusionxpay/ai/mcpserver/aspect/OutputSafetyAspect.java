@@ -7,7 +7,6 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import com.fusionxpay.ai.mcpserver.config.McpSafetyProperties;
 import com.fusionxpay.ai.mcpserver.tool.McpToolOperation;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
@@ -18,13 +17,14 @@ import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 @Aspect
 @Component
 @Slf4j
 @Order(Ordered.LOWEST_PRECEDENCE)
-@RequiredArgsConstructor
 public class OutputSafetyAspect {
 
     private static final String REDACTION = "[REDACTED]";
@@ -32,6 +32,18 @@ public class OutputSafetyAspect {
     private final ObjectMapper objectMapper;
     private final McpSafetyProperties safetyProperties;
     private final ObjectProvider<ToolAspectObserver> observerProvider;
+    private final List<Pattern> redactionPatterns;
+
+    public OutputSafetyAspect(ObjectMapper objectMapper,
+                              McpSafetyProperties safetyProperties,
+                              ObjectProvider<ToolAspectObserver> observerProvider) {
+        this.objectMapper = objectMapper;
+        this.safetyProperties = safetyProperties;
+        this.observerProvider = observerProvider;
+        this.redactionPatterns = safetyProperties.getRedactionPatterns().stream()
+                .map(Pattern::compile)
+                .collect(Collectors.toUnmodifiableList());
+    }
 
     @Around("@annotation(com.fusionxpay.ai.mcpserver.tool.McpToolOperation)")
     public Object sanitize(ProceedingJoinPoint joinPoint) throws Throwable {
@@ -81,8 +93,8 @@ public class OutputSafetyAspect {
 
     private String redactString(String value) {
         String sanitized = value;
-        for (String pattern : safetyProperties.getRedactionPatterns()) {
-            sanitized = Pattern.compile(pattern).matcher(sanitized).replaceAll(REDACTION);
+        for (Pattern pattern : redactionPatterns) {
+            sanitized = pattern.matcher(sanitized).replaceAll(REDACTION);
         }
         return sanitized;
     }
