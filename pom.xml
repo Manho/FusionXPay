@@ -27,7 +27,7 @@
         <maven.compiler.parameters>true</maven.compiler.parameters>
         <spring-boot.version>3.5.13</spring-boot.version>
         <spring-cloud.version>2025.0.1</spring-cloud.version>
-        <spring-ai.version>1.0.0</spring-ai.version>
+        <spring-ai.version>1.1.4</spring-ai.version>
         <picocli.version>4.7.7</picocli.version>
         <skipUnitTests>false</skipUnitTests>
         <common-module.version>1.0.0</common-module.version> 
