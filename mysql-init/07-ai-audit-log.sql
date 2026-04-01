@@ -1,7 +1,7 @@
 CREATE TABLE IF NOT EXISTS ai_audit_log (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     event_id VARCHAR(36) NOT NULL UNIQUE,
-    source VARCHAR(8) NOT NULL,
+    source VARCHAR(16) NOT NULL,
     merchant_id BIGINT NULL,
     action_name VARCHAR(64) NOT NULL,
     status VARCHAR(32) NOT NULL,

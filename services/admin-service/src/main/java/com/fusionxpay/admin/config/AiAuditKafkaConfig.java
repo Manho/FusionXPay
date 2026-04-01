@@ -13,9 +13,9 @@ import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
-import org.springframework.kafka.listener.CommonLoggingErrorHandler;
-import org.springframework.kafka.listener.ConcurrentMessageListenerContainer;
+import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
+import org.springframework.util.backoff.FixedBackOff;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -23,7 +23,7 @@ import java.util.Map;
 @Configuration
 @EnableKafka
 @EnableConfigurationProperties({KafkaProperties.class, AiAuditConsumerProperties.class})
-@ConditionalOnProperty(prefix = "fusionx.ai.audit", name = "consumer-enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(prefix = "fusionx.ai.audit.consumer", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class AiAuditKafkaConfig {
 
     @Bean
@@ -31,8 +31,8 @@ public class AiAuditKafkaConfig {
                                                                   ObjectMapper objectMapper,
                                                                   AiAuditConsumerProperties auditProperties) {
         Map<String, Object> properties = new HashMap<>(kafkaProperties.buildConsumerProperties());
-        properties.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, auditProperties.getConsumerGroup());
-        properties.putIfAbsent(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
+        properties.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, auditProperties.getGroup());
+        properties.putIfAbsent(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         properties.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         properties.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class);
 
@@ -49,7 +49,7 @@ public class AiAuditKafkaConfig {
         ConcurrentKafkaListenerContainerFactory<String, AuditEvent> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(auditEventConsumerFactory);
-        factory.setCommonErrorHandler(new CommonLoggingErrorHandler());
+        factory.setCommonErrorHandler(new DefaultErrorHandler(new FixedBackOff(1000L, 3L)));
         factory.setConcurrency(1);
         factory.getContainerProperties().setObservationEnabled(false);
         return factory;

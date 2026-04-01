@@ -33,7 +33,7 @@ public class AiAuditLog {
     private String eventId;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "source", nullable = false, length = 8)
+    @Column(name = "source", nullable = false, length = 16)
     private AuditSource source;
 
     @Column(name = "merchant_id")

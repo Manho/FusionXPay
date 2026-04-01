@@ -6,12 +6,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @Getter
 @Setter
-@ConfigurationProperties(prefix = "fusionx.ai.audit")
+@ConfigurationProperties(prefix = "fusionx.ai.audit.consumer")
 public class AiAuditConsumerProperties {
 
-    private String topic = "ai-audit-log";
+    private String group = "admin-service-ai-audit";
 
-    private String consumerGroup = "admin-service-ai-audit";
-
-    private boolean consumerEnabled = true;
+    private boolean enabled = true;
 }

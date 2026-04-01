@@ -11,6 +11,7 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
@@ -38,7 +39,7 @@ import static org.assertj.core.api.Assertions.assertThat;
         "spring.cloud.discovery.enabled=false",
         "fusionx.ai.audit.enabled=false",
         "fusionx.ai.audit.topic=ai-audit-log",
-        "fusionx.ai.audit.consumer-enabled=true",
+        "fusionx.ai.audit.consumer.enabled=true",
         "spring.jpa.hibernate.ddl-auto=update"
 })
 @Import(AiAuditKafkaIT.KafkaProducerTestConfig.class)
@@ -54,7 +55,7 @@ class AiAuditKafkaIT extends AbstractIntegrationTest {
 
     @DynamicPropertySource
     static void auditConsumerProperties(DynamicPropertyRegistry registry) {
-        registry.add("fusionx.ai.audit.consumer-group", () -> GROUP_ID);
+        registry.add("fusionx.ai.audit.consumer.group", () -> GROUP_ID);
         registry.add("spring.kafka.consumer.auto-offset-reset", () -> "earliest");
     }
 
@@ -64,6 +65,7 @@ class AiAuditKafkaIT extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("Persists a CLI audit event into MySQL")
     void persistsCliAuditEventIntoMysql() {
         AuditEvent event = sampleEvent();
 
@@ -77,10 +79,16 @@ class AiAuditKafkaIT extends AbstractIntegrationTest {
                     assertThat(persisted.getMerchantId()).isEqualTo(101L);
                     assertThat(persisted.getActionName()).isEqualTo("payment.query");
                     assertThat(persisted.getStatus()).isEqualTo(AuditStatus.SUCCESS);
+                    assertThat(persisted.getDurationMs()).isEqualTo(123L);
+                    assertThat(persisted.getInputSummary()).isEqualTo("transactionId=txn_123");
+                    assertThat(persisted.getOutputSummary()).isEqualTo("status=PROCESSING");
+                    assertThat(persisted.getConversationId()).isEqualTo("conversation-123");
+                    assertThat(persisted.getCorrelationId()).isEqualTo(event.getCorrelationId());
                 });
     }
 
     @Test
+    @DisplayName("Ignores duplicate events with the same event ID")
     void ignoresDuplicateEventsByEventId() {
         AuditEvent event = sampleEvent();
 
@@ -102,6 +110,7 @@ class AiAuditKafkaIT extends AbstractIntegrationTest {
                 .durationMs(123L)
                 .inputSummary("transactionId=txn_123")
                 .outputSummary("status=PROCESSING")
+                .conversationId("conversation-123")
                 .timestamp(Instant.now())
                 .correlationId(UUID.randomUUID().toString())
                 .build();

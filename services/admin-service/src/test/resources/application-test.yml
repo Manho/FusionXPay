@@ -38,4 +38,5 @@ fusionx:
   ai:
     audit:
       enabled: false
-      consumer-enabled: false
+      consumer:
+        enabled: false

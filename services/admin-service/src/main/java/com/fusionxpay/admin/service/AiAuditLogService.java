@@ -5,6 +5,7 @@ import com.fusionxpay.admin.model.AiAuditLog;
 import com.fusionxpay.admin.repository.AiAuditLogRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,6 +38,13 @@ public class AiAuditLogService {
                 .correlationId(event.getCorrelationId())
                 .createdAt(event.getTimestamp() == null ? Instant.now() : event.getTimestamp())
                 .build();
-        repository.save(logEntry);
+        try {
+            repository.saveAndFlush(logEntry);
+        } catch (DataIntegrityViolationException ex) {
+            if (!repository.existsByEventId(event.getEventId())) {
+                throw ex;
+            }
+            log.info("Ignoring duplicate AI audit event {}", event.getEventId());
+        }
     }
 }
