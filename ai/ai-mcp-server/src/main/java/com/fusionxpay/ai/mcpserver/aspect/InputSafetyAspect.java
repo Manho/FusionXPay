@@ -28,7 +28,7 @@ import java.util.stream.Collectors;
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class InputSafetyAspect {
 
-    private static final Pattern BASE64_SEGMENT_PATTERN = Pattern.compile("\\b[A-Za-z0-9+/_-]{24,}={0,2}\\b");
+    private static final Pattern BASE64_SEGMENT_PATTERN = Pattern.compile("\\b[A-Za-z0-9+/_-]{24,512}={0,2}\\b");
 
     private final ObjectMapper objectMapper;
     private final McpSafetyProperties safetyProperties;

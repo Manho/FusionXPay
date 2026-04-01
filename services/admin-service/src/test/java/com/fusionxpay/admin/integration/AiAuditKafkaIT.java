@@ -14,6 +14,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -48,6 +49,7 @@ class AiAuditKafkaIT extends AbstractIntegrationTest {
     private static final String GROUP_ID = "admin-audit-it-" + UUID.randomUUID();
 
     @Autowired
+    @Qualifier("auditEventTestKafkaTemplate")
     private KafkaTemplate<String, AuditEvent> kafkaTemplate;
 
     @Autowired

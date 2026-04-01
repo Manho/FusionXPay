@@ -71,6 +71,7 @@ fusionx:
       consumer:
         group: ${FUSIONX_AI_AUDIT_CONSUMER_GROUP:admin-service-ai-audit}
         enabled: ${FUSIONX_AI_AUDIT_CONSUMER_ENABLED:true}
+        dlt-topic: ${FUSIONX_AI_AUDIT_DLT_TOPIC:ai-audit-log.DLT}
 
 # OpenAPI
 springdoc:

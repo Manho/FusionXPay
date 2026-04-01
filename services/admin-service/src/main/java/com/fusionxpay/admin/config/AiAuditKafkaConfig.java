@@ -3,7 +3,10 @@ package com.fusionxpay.admin.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fusionxpay.ai.common.audit.AuditEvent;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -13,7 +16,13 @@ import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
+import org.springframework.kafka.core.DefaultKafkaProducerFactory;
+import org.springframework.kafka.core.KafkaOperations;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.core.ProducerFactory;
+import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
 import org.springframework.kafka.listener.DefaultErrorHandler;
+import org.springframework.kafka.support.serializer.JsonSerializer;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.util.backoff.FixedBackOff;
 
@@ -44,12 +53,43 @@ public class AiAuditKafkaConfig {
     }
 
     @Bean
+    ProducerFactory<String, AuditEvent> auditEventDltProducerFactory(KafkaProperties kafkaProperties,
+                                                                     ObjectMapper objectMapper) {
+        Map<String, Object> properties = new HashMap<>(kafkaProperties.buildProducerProperties());
+        properties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        properties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
+        properties.put(JsonSerializer.ADD_TYPE_INFO_HEADERS, false);
+        return new DefaultKafkaProducerFactory<>(properties, new StringSerializer(), new JsonSerializer<>(objectMapper));
+    }
+
+    @Bean
+    KafkaTemplate<String, AuditEvent> auditEventDltKafkaTemplate(ProducerFactory<String, AuditEvent> auditEventDltProducerFactory) {
+        return new KafkaTemplate<>(auditEventDltProducerFactory);
+    }
+
+    @Bean
+    DeadLetterPublishingRecoverer aiAuditDeadLetterPublishingRecoverer(
+            KafkaOperations<String, AuditEvent> auditEventDltKafkaTemplate,
+            AiAuditConsumerProperties auditProperties) {
+        return new DeadLetterPublishingRecoverer(
+                auditEventDltKafkaTemplate,
+                (record, ex) -> new TopicPartition(auditProperties.getDltTopic(), record.partition())
+        );
+    }
+
+    @Bean
+    DefaultErrorHandler aiAuditKafkaErrorHandler(DeadLetterPublishingRecoverer aiAuditDeadLetterPublishingRecoverer) {
+        return new DefaultErrorHandler(aiAuditDeadLetterPublishingRecoverer, new FixedBackOff(1000L, 3L));
+    }
+
+    @Bean
     ConcurrentKafkaListenerContainerFactory<String, AuditEvent> auditEventKafkaListenerContainerFactory(
-            ConsumerFactory<String, AuditEvent> auditEventConsumerFactory) {
+            ConsumerFactory<String, AuditEvent> auditEventConsumerFactory,
+            DefaultErrorHandler aiAuditKafkaErrorHandler) {
         ConcurrentKafkaListenerContainerFactory<String, AuditEvent> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(auditEventConsumerFactory);
-        factory.setCommonErrorHandler(new DefaultErrorHandler(new FixedBackOff(1000L, 3L)));
+        factory.setCommonErrorHandler(aiAuditKafkaErrorHandler);
         factory.setConcurrency(1);
         factory.getContainerProperties().setObservationEnabled(false);
         return factory;

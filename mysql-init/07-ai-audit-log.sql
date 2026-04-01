@@ -13,5 +13,6 @@ CREATE TABLE IF NOT EXISTS ai_audit_log (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_audit_merchant (merchant_id),
     INDEX idx_audit_action (action_name),
+    INDEX idx_audit_correlation (correlation_id),
     INDEX idx_audit_created (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

@@ -17,6 +17,7 @@ import com.fusionxpay.ai.mcpserver.tool.FusionXMcpTools;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -79,6 +80,11 @@ class McpDemoScenarioIT {
     @BeforeAll
     static void startWireMock() {
         WIRE_MOCK.start();
+    }
+
+    @BeforeEach
+    void resetWireMock() {
+        WIRE_MOCK.resetAll();
     }
 
     @AfterAll
