@@ -16,15 +16,20 @@ public class AuthLoginCommand extends AbstractCliLeafCommand implements Callable
 
     private final CliSessionService sessionService;
 
-    @Option(names = "--email", required = true, description = "Merchant account email")
+    @Option(names = "--email", description = "Merchant account email (legacy fallback)")
     String email;
 
-    @Option(names = "--password", required = true, description = "Merchant account password")
+    @Option(names = "--password", description = "Merchant account password (legacy fallback)")
     String password;
+
+    @Option(names = "--device", description = "Force device-code browser auth instead of local callback")
+    boolean deviceCodeOnly;
 
     @Override
     public Integer call() {
-        CliSessionService.LoginResult result = sessionService.login(email, password);
+        CliSessionService.LoginResult result = hasLegacyCredentials()
+                ? sessionService.login(email, password)
+                : sessionService.loginInteractive(!deviceCodeOnly, message -> out().println(message));
         out().printf("Logged in as %s%n", result.config().getMerchantEmail());
         out().printf("Merchant ID: %s%n", result.config().getMerchantId());
         out().printf("Merchant Name: %s%n", result.config().getMerchantName());
@@ -43,6 +48,10 @@ public class AuthLoginCommand extends AbstractCliLeafCommand implements Callable
 
     @Override
     public String auditInputSummary() {
-        return "email=" + email;
+        return hasLegacyCredentials() ? "email=" + email : "interactive";
+    }
+
+    private boolean hasLegacyCredentials() {
+        return email != null && !email.isBlank() && password != null && !password.isBlank();
     }
 }

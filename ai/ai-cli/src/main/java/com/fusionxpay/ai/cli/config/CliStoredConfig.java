@@ -17,6 +17,9 @@ public class CliStoredConfig {
 
     private String baseUrl;
     private String jwt;
+    private String refreshToken;
+    private String audience;
+    private String tokenType;
     private String merchantEmail;
     private Long merchantId;
     private String merchantName;

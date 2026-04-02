@@ -56,6 +56,13 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 // Public endpoints
                 .requestMatchers("/api/v1/admin/auth/login", "/api/v1/admin/auth/register").permitAll()
+                .requestMatchers(
+                        "/api/v1/admin/auth/ai/authorize",
+                        "/api/v1/admin/auth/ai/token",
+                        "/api/v1/admin/auth/ai/poll",
+                        "/api/v1/admin/auth/ai/refresh",
+                        "/api/v1/admin/auth/ai/revoke"
+                ).permitAll()
                 .requestMatchers("/actuator/**").permitAll()
                 .requestMatchers("/swagger-ui/**", "/api-docs/**", "/swagger-ui.html").permitAll()
                 // Protected endpoints

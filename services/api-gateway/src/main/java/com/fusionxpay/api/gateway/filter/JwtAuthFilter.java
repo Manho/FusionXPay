@@ -21,6 +21,7 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
 
     private static final String AUTHORIZATION_HEADER = "Authorization";
     private static final String BEARER_PREFIX = "Bearer ";
+    private static final java.util.Set<String> ALLOWED_AUDIENCES = java.util.Set.of("ai-cli", "ai-mcp");
 
     private final JwtUtils jwtUtils;
 
@@ -46,11 +47,24 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
             exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
             return exchange.getResponse().setComplete();
         }
+        if (StringUtils.hasText(claims.audience()) && !ALLOWED_AUDIENCES.contains(claims.audience())) {
+            log.warn("Unsupported JWT audience {} for request to {}", claims.audience(), path);
+            exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+            return exchange.getResponse().setComplete();
+        }
 
         ServerWebExchange mutatedExchange = exchange.mutate()
                 .request(exchange.getRequest().mutate()
                         .header("X-Merchant-Id", String.valueOf(claims.merchantId()))
                         .header("X-Merchant-Role", claims.role())
+                        .headers(headers -> {
+                            if (StringUtils.hasText(claims.audience())) {
+                                headers.add("X-Token-Audience", claims.audience());
+                            }
+                            if (StringUtils.hasText(claims.tokenType())) {
+                                headers.add("X-Token-Type", claims.tokenType());
+                            }
+                        })
                         .build())
                 .build();
         return chain.filter(mutatedExchange);

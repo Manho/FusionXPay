@@ -74,6 +74,9 @@ public class CliConfigStore {
     public synchronized void clearSession() {
         mutate(config -> {
             config.setJwt(null);
+            config.setRefreshToken(null);
+            config.setAudience(null);
+            config.setTokenType(null);
             config.setMerchantEmail(null);
             config.setMerchantId(null);
             config.setMerchantName(null);
@@ -122,6 +125,9 @@ public class CliConfigStore {
     private boolean isEffectivelyEmpty(CliStoredConfig config) {
         return isBlank(config.getBaseUrl())
                 && isBlank(config.getJwt())
+                && isBlank(config.getRefreshToken())
+                && isBlank(config.getAudience())
+                && isBlank(config.getTokenType())
                 && isBlank(config.getMerchantEmail())
                 && config.getMerchantId() == null
                 && isBlank(config.getMerchantName())

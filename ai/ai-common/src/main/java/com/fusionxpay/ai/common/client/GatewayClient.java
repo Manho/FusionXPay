@@ -5,6 +5,17 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fusionxpay.ai.common.dto.auth.GatewayLoginRequest;
 import com.fusionxpay.ai.common.dto.auth.GatewayLoginResponse;
 import com.fusionxpay.ai.common.dto.auth.GatewayMerchantInfo;
+import com.fusionxpay.ai.common.dto.auth.ai.AiAuthorizeRequest;
+import com.fusionxpay.ai.common.dto.auth.ai.AiAuthorizeResponse;
+import com.fusionxpay.ai.common.dto.auth.ai.AiConsentApproveRequest;
+import com.fusionxpay.ai.common.dto.auth.ai.AiConsentApproveResponse;
+import com.fusionxpay.ai.common.dto.auth.ai.AiConsentViewResponse;
+import com.fusionxpay.ai.common.dto.auth.ai.AiPollRequest;
+import com.fusionxpay.ai.common.dto.auth.ai.AiPollResponse;
+import com.fusionxpay.ai.common.dto.auth.ai.AiRefreshRequest;
+import com.fusionxpay.ai.common.dto.auth.ai.AiRevokeRequest;
+import com.fusionxpay.ai.common.dto.auth.ai.AiTokenExchangeRequest;
+import com.fusionxpay.ai.common.dto.auth.ai.AiTokenResponse;
 import com.fusionxpay.ai.common.dto.order.OrderPageResult;
 import com.fusionxpay.ai.common.dto.order.OrderRecord;
 import com.fusionxpay.ai.common.dto.order.OrderSearchRequest;
@@ -45,6 +56,59 @@ public class GatewayClient {
 
     public GatewayMerchantInfo getCurrentMerchant(String token) {
         return execute(authenticated(restClient.get().uri("/api/v1/admin/auth/me"), token, null), GatewayMerchantInfo.class);
+    }
+
+    public AiAuthorizeResponse authorizeAiSession(AiAuthorizeRequest request) {
+        return execute(restClient.post()
+                .uri("/api/v1/admin/auth/ai/authorize")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(request), AiAuthorizeResponse.class);
+    }
+
+    public AiConsentViewResponse getAiConsentSession(String token, @Nullable String sessionId, @Nullable String userCode) {
+        UriComponentsBuilder builder = UriComponentsBuilder.fromPath("/api/v1/admin/auth/ai/consent");
+        if (sessionId != null && !sessionId.isBlank()) {
+            builder.queryParam("sessionId", sessionId);
+        }
+        if (userCode != null && !userCode.isBlank()) {
+            builder.queryParam("userCode", userCode);
+        }
+        return execute(authenticated(restClient.get().uri(builder.build().toUriString()), token, null), AiConsentViewResponse.class);
+    }
+
+    public AiConsentApproveResponse approveAiConsent(String token, AiConsentApproveRequest request) {
+        return execute(authenticated(restClient.post()
+                .uri("/api/v1/admin/auth/ai/consent/approve")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(request), token, null), AiConsentApproveResponse.class);
+    }
+
+    public AiTokenResponse exchangeAiToken(AiTokenExchangeRequest request) {
+        return execute(restClient.post()
+                .uri("/api/v1/admin/auth/ai/token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(request), AiTokenResponse.class);
+    }
+
+    public AiPollResponse pollAiSession(AiPollRequest request) {
+        return execute(restClient.post()
+                .uri("/api/v1/admin/auth/ai/poll")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(request), AiPollResponse.class);
+    }
+
+    public AiTokenResponse refreshAiToken(AiRefreshRequest request) {
+        return execute(restClient.post()
+                .uri("/api/v1/admin/auth/ai/refresh")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(request), AiTokenResponse.class);
+    }
+
+    public void revokeAiSession(AiRevokeRequest request) {
+        execute(restClient.post()
+                .uri("/api/v1/admin/auth/ai/revoke")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(request), Void.class);
     }
 
     public OrderRecord getOrderByNumber(String token, Long merchantId, String orderNumber) {

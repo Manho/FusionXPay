@@ -12,4 +12,6 @@ public class McpAuthProperties {
     private String jwtToken;
     private String email;
     private String password;
+    private boolean interactiveEnabled = true;
+    private String audience = "ai-mcp";
 }

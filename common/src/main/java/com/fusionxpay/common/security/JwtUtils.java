@@ -24,12 +24,21 @@ public class JwtUtils {
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + expirationMs);
 
-        return Jwts.builder()
+        var builder = Jwts.builder()
                 .subject(claims.email())
                 .claim("merchantId", claims.merchantId())
                 .claim("role", claims.role())
                 .issuedAt(now)
-                .expiration(expiryDate)
+                .expiration(expiryDate);
+
+        if (claims.audience() != null && !claims.audience().isBlank()) {
+            builder.claim("aud", claims.audience());
+        }
+        if (claims.tokenType() != null && !claims.tokenType().isBlank()) {
+            builder.claim("tokenType", claims.tokenType());
+        }
+
+        return builder
                 .signWith(secretKey)
                 .compact();
     }
@@ -44,7 +53,9 @@ public class JwtUtils {
         return new JwtClaims(
                 claims.get("merchantId", Long.class),
                 claims.getSubject(),
-                claims.get("role", String.class)
+                claims.get("role", String.class),
+                claims.get("aud", String.class),
+                claims.get("tokenType", String.class)
         );
     }
 
