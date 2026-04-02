@@ -59,6 +59,13 @@ if ! grep -Eq '^[[:space:]]*CORS_ALLOWED_ORIGINS=' "${ENV_FILE}"; then
 fi
 echo "[INFO] CORS_ALLOWED_ORIGINS is configured in env file."
 
+if ! grep -Eq '^[[:space:]]*FUSIONX_AI_FRONTEND_BASE_URL=' "${ENV_FILE}"; then
+  echo "[ERROR] Missing FUSIONX_AI_FRONTEND_BASE_URL in env file: ${ENV_FILE}"
+  echo "Set FUSIONX_AI_FRONTEND_BASE_URL to the public frontend origin used by AI consent pages before deploy."
+  exit 1
+fi
+echo "[INFO] FUSIONX_AI_FRONTEND_BASE_URL is configured in env file."
+
 compose config >/dev/null
 
 echo "[INFO] Pulling upstream images (with retries on transient failures)..."
