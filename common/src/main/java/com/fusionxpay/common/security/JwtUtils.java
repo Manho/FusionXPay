@@ -10,6 +10,7 @@ import io.jsonwebtoken.security.Keys;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.util.Collection;
 import java.util.Date;
 
 public class JwtUtils {
@@ -54,9 +55,17 @@ public class JwtUtils {
                 claims.get("merchantId", Long.class),
                 claims.getSubject(),
                 claims.get("role", String.class),
-                claims.get("aud", String.class),
+                resolveAudience(claims),
                 claims.get("tokenType", String.class)
         );
+    }
+
+    private String resolveAudience(Claims claims) {
+        Collection<String> audience = claims.getAudience();
+        if (audience != null && !audience.isEmpty()) {
+            return audience.iterator().next();
+        }
+        return claims.get("aud", String.class);
     }
 
     public boolean validateToken(String token) {
