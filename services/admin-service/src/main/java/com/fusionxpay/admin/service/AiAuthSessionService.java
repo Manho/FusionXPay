@@ -15,9 +15,12 @@ import com.fusionxpay.ai.common.dto.auth.ai.AiTokenResponse;
 import com.fusionxpay.admin.config.AiAuthProperties;
 import com.fusionxpay.admin.dto.MerchantInfo;
 import com.fusionxpay.admin.exception.ResourceNotFoundException;
+import com.fusionxpay.admin.model.AiAuthSession;
+import com.fusionxpay.admin.repository.AiAuthSessionRepository;
 import com.fusionxpay.admin.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.net.URI;
 import java.net.URLEncoder;
@@ -26,31 +29,25 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.Base64;
-import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @RequiredArgsConstructor
+@Transactional
 public class AiAuthSessionService {
 
     private static final String SESSION_TOKEN_TYPE = "interactive-session";
 
     private final AiAuthProperties properties;
     private final JwtTokenProvider jwtTokenProvider;
-
-    private final Map<String, SessionRecord> sessionsById = new ConcurrentHashMap<>();
-    private final Map<String, String> sessionIdByAuthorizationCode = new ConcurrentHashMap<>();
-    private final Map<String, String> sessionIdByDeviceCode = new ConcurrentHashMap<>();
-    private final Map<String, String> sessionIdByUserCode = new ConcurrentHashMap<>();
-    private final Map<String, String> sessionIdByRefreshToken = new ConcurrentHashMap<>();
+    private final AiAuthSessionRepository sessionRepository;
 
     public AiAuthorizeResponse authorize(AiAuthorizeRequest request) {
         cleanupExpiredSessions();
         validateAuthorizeRequest(request);
 
         Instant now = Instant.now();
-        SessionRecord session = SessionRecord.builder()
+        AiAuthSession session = AiAuthSession.builder()
                 .sessionId(UUID.randomUUID().toString())
                 .clientType(request.getClientType())
                 .audience(request.getAudience())
@@ -61,16 +58,10 @@ public class AiAuthSessionService {
                 .codeChallengeMethod(normalizeCodeChallengeMethod(request.getCodeChallengeMethod()))
                 .deviceCode(request.getFlowMode() == AiAuthFlowMode.DEVICE_CODE ? UUID.randomUUID().toString() : null)
                 .userCode(request.getFlowMode() == AiAuthFlowMode.DEVICE_CODE ? generateUserCode() : null)
-                .expiresAt(now.plus(properties.getSessionTtl()))
+                .authorizationExpiresAt(now.plus(properties.getSessionTtl()))
                 .build();
 
-        sessionsById.put(session.getSessionId(), session);
-        if (session.getDeviceCode() != null) {
-            sessionIdByDeviceCode.put(session.getDeviceCode(), session.getSessionId());
-        }
-        if (session.getUserCode() != null) {
-            sessionIdByUserCode.put(session.getUserCode(), session.getSessionId());
-        }
+        sessionRepository.save(session);
 
         return AiAuthorizeResponse.builder()
                 .sessionId(session.getSessionId())
@@ -88,8 +79,8 @@ public class AiAuthSessionService {
 
     public AiConsentViewResponse getConsent(String sessionId, String userCode, MerchantInfo merchantInfo) {
         cleanupExpiredSessions();
-        SessionRecord session = findSession(sessionId, userCode);
-        ensureActiveSession(session);
+        AiAuthSession session = findSession(sessionId, userCode);
+        ensureAuthorizationActive(session, Instant.now());
 
         return AiConsentViewResponse.builder()
                 .sessionId(session.getSessionId())
@@ -99,15 +90,15 @@ public class AiAuthSessionService {
                 .flowMode(session.getFlowMode())
                 .merchantEmail(merchantInfo.getEmail())
                 .merchantName(merchantInfo.getMerchantName())
-                .expiresIn(Math.max(0, session.getExpiresAt().getEpochSecond() - Instant.now().getEpochSecond()))
+                .expiresIn(Math.max(0, session.getAuthorizationExpiresAt().getEpochSecond() - Instant.now().getEpochSecond()))
                 .callbackDisplay(session.getCallbackUrl())
                 .build();
     }
 
     public AiConsentApproveResponse approve(String sessionId, String userCode, MerchantInfo merchantInfo) {
         cleanupExpiredSessions();
-        SessionRecord session = findSession(sessionId, userCode);
-        ensureActiveSession(session);
+        AiAuthSession session = findSession(sessionId, userCode);
+        ensureAuthorizationActive(session, Instant.now());
 
         session.setMerchantId(merchantInfo.getId());
         session.setMerchantEmail(merchantInfo.getEmail());
@@ -119,7 +110,7 @@ public class AiAuthSessionService {
             String authorizationCode = UUID.randomUUID().toString();
             session.setAuthorizationCode(authorizationCode);
             session.setAuthorizationCodeExpiresAt(Instant.now().plus(properties.getAuthorizationCodeTtl()));
-            sessionIdByAuthorizationCode.put(authorizationCode, session.getSessionId());
+            sessionRepository.save(session);
             return AiConsentApproveResponse.builder()
                     .flowMode(session.getFlowMode())
                     .approved(true)
@@ -128,6 +119,7 @@ public class AiAuthSessionService {
                     .build();
         }
 
+        sessionRepository.save(session);
         return AiConsentApproveResponse.builder()
                 .flowMode(session.getFlowMode())
                 .approved(true)
@@ -137,8 +129,8 @@ public class AiAuthSessionService {
 
     public AiPollResponse poll(String deviceCode) {
         cleanupExpiredSessions();
-        SessionRecord session = requireByDeviceCode(deviceCode);
-        if (session.isExpired()) {
+        AiAuthSession session = requireByDeviceCode(deviceCode);
+        if (session.isAuthorizationExpired(Instant.now())) {
             return AiPollResponse.builder()
                     .status(AiAuthPollStatus.EXPIRED)
                     .pollIntervalSeconds(properties.getPollInterval().toSeconds())
@@ -165,37 +157,38 @@ public class AiAuthSessionService {
             throw new IllegalArgumentException("grantType is required");
         }
 
-        SessionRecord session = switch (request.getGrantType()) {
+        AiAuthSession session = switch (request.getGrantType()) {
             case AUTHORIZATION_CODE -> validateAuthorizationCodeGrant(request);
             case DEVICE_CODE -> validateDeviceCodeGrant(request);
         };
 
-        return issueTokens(session);
+        return issueTokens(session, Instant.now(), true);
     }
 
     public AiTokenResponse refresh(String refreshToken) {
+        AiAuthSession session = requireByRefreshToken(refreshToken);
+        Instant now = Instant.now();
+        ensureRefreshable(session, now);
+        AiTokenResponse response = issueTokens(session, now, false);
         cleanupExpiredSessions();
-        SessionRecord session = requireByRefreshToken(refreshToken);
-        if (session.getRefreshTokenExpiresAt() == null || session.getRefreshTokenExpiresAt().isBefore(Instant.now())) {
-            revokeInternal(session);
-            throw new IllegalArgumentException("Refresh token expired");
-        }
-        return issueTokens(session);
+        return response;
     }
 
     public void revoke(String refreshToken) {
-        cleanupExpiredSessions();
-        SessionRecord session = requireByRefreshToken(refreshToken);
+        AiAuthSession session = requireByRefreshToken(refreshToken);
         revokeInternal(session);
+        sessionRepository.save(session);
+        cleanupExpiredSessions();
     }
 
-    private SessionRecord validateAuthorizationCodeGrant(AiTokenExchangeRequest request) {
+    private AiAuthSession validateAuthorizationCodeGrant(AiTokenExchangeRequest request) {
         if (request.getCode() == null || request.getCode().isBlank()) {
             throw new IllegalArgumentException("code is required");
         }
-        SessionRecord session = requireByAuthorizationCode(request.getCode());
-        ensureApprovedSession(session);
-        if (session.getAuthorizationCodeExpiresAt() == null || session.getAuthorizationCodeExpiresAt().isBefore(Instant.now())) {
+        AiAuthSession session = requireByAuthorizationCode(request.getCode());
+        Instant now = Instant.now();
+        ensureApprovedForTokenExchange(session, now);
+        if (session.getAuthorizationCodeExpiresAt() == null || session.getAuthorizationCodeExpiresAt().isBefore(now)) {
             throw new IllegalArgumentException("Authorization code expired");
         }
         if (session.isAuthorizationCodeConsumed()) {
@@ -205,22 +198,25 @@ public class AiAuthSessionService {
             verifyPkce(session, request.getCodeVerifier());
         }
         session.setAuthorizationCodeConsumed(true);
-        sessionIdByAuthorizationCode.remove(session.getAuthorizationCode());
+        sessionRepository.save(session);
         return session;
     }
 
-    private SessionRecord validateDeviceCodeGrant(AiTokenExchangeRequest request) {
+    private AiAuthSession validateDeviceCodeGrant(AiTokenExchangeRequest request) {
         if (request.getDeviceCode() == null || request.getDeviceCode().isBlank()) {
             throw new IllegalArgumentException("deviceCode is required");
         }
-        SessionRecord session = requireByDeviceCode(request.getDeviceCode());
-        ensureApprovedSession(session);
+        AiAuthSession session = requireByDeviceCode(request.getDeviceCode());
+        ensureApprovedForTokenExchange(session, Instant.now());
         return session;
     }
 
-    private AiTokenResponse issueTokens(SessionRecord session) {
-        ensureApprovedSession(session);
-
+    private AiTokenResponse issueTokens(AiAuthSession session, Instant now, boolean requireAuthorizationWindow) {
+        if (requireAuthorizationWindow) {
+            ensureApprovedForTokenExchange(session, now);
+        } else {
+            ensureRefreshable(session, now);
+        }
         String accessToken = jwtTokenProvider.generateToken(
                 session.getMerchantId(),
                 session.getMerchantEmail(),
@@ -230,12 +226,9 @@ public class AiAuthSessionService {
                 properties.getAccessTokenTtl().toMillis()
         );
         String newRefreshToken = UUID.randomUUID().toString();
-        if (session.getRefreshToken() != null) {
-            sessionIdByRefreshToken.remove(session.getRefreshToken());
-        }
         session.setRefreshToken(newRefreshToken);
-        session.setRefreshTokenExpiresAt(Instant.now().plus(properties.getRefreshTokenTtl()));
-        sessionIdByRefreshToken.put(newRefreshToken, session.getSessionId());
+        session.setRefreshTokenExpiresAt(now.plus(properties.getRefreshTokenTtl()));
+        sessionRepository.save(session);
 
         return AiTokenResponse.builder()
                 .accessToken(accessToken)
@@ -253,7 +246,7 @@ public class AiAuthSessionService {
                 .build();
     }
 
-    private void verifyPkce(SessionRecord session, String codeVerifier) {
+    private void verifyPkce(AiAuthSession session, String codeVerifier) {
         if (codeVerifier == null || codeVerifier.isBlank()) {
             throw new IllegalArgumentException("codeVerifier is required");
         }
@@ -317,7 +310,7 @@ public class AiAuthSessionService {
         return method == null || method.isBlank() ? "S256" : method;
     }
 
-    private SessionRecord findSession(String sessionId, String userCode) {
+    private AiAuthSession findSession(String sessionId, String userCode) {
         if (sessionId != null && !sessionId.isBlank()) {
             return requireBySessionId(sessionId);
         }
@@ -327,7 +320,7 @@ public class AiAuthSessionService {
         throw new IllegalArgumentException("sessionId or userCode is required");
     }
 
-    private String buildAuthorizationUrl(SessionRecord session) {
+    private String buildAuthorizationUrl(AiAuthSession session) {
         if (session.getFlowMode() == AiAuthFlowMode.CALLBACK) {
             return properties.getFrontendBaseUrl()
                     .resolve(properties.getConsentPath() + "?session=" + session.getSessionId())
@@ -339,7 +332,7 @@ public class AiAuthSessionService {
                 .toString();
     }
 
-    private String buildCallbackRedirect(SessionRecord session, String authorizationCode) {
+    private String buildCallbackRedirect(AiAuthSession session, String authorizationCode) {
         StringBuilder builder = new StringBuilder(session.getCallbackUrl());
         builder.append(session.getCallbackUrl().contains("?") ? "&" : "?")
                 .append("code=").append(URLEncoder.encode(authorizationCode, StandardCharsets.UTF_8));
@@ -356,51 +349,36 @@ public class AiAuthSessionService {
                 .toUpperCase();
     }
 
-    private SessionRecord requireBySessionId(String sessionId) {
-        SessionRecord session = sessionsById.get(sessionId);
-        if (session == null) {
-            throw new ResourceNotFoundException("AI auth session not found");
-        }
-        return session;
+    private AiAuthSession requireBySessionId(String sessionId) {
+        return sessionRepository.findBySessionId(sessionId)
+                .orElseThrow(() -> new ResourceNotFoundException("AI auth session not found"));
     }
 
-    private SessionRecord requireByAuthorizationCode(String authorizationCode) {
-        String sessionId = sessionIdByAuthorizationCode.get(authorizationCode);
-        if (sessionId == null) {
-            throw new ResourceNotFoundException("Authorization code not found");
-        }
-        return requireBySessionId(sessionId);
+    private AiAuthSession requireByAuthorizationCode(String authorizationCode) {
+        return sessionRepository.findByAuthorizationCode(authorizationCode)
+                .orElseThrow(() -> new ResourceNotFoundException("Authorization code not found"));
     }
 
-    private SessionRecord requireByDeviceCode(String deviceCode) {
-        String sessionId = sessionIdByDeviceCode.get(deviceCode);
-        if (sessionId == null) {
-            throw new ResourceNotFoundException("Device code not found");
-        }
-        return requireBySessionId(sessionId);
+    private AiAuthSession requireByDeviceCode(String deviceCode) {
+        return sessionRepository.findByDeviceCode(deviceCode)
+                .orElseThrow(() -> new ResourceNotFoundException("Device code not found"));
     }
 
-    private SessionRecord requireByUserCode(String userCode) {
-        String sessionId = sessionIdByUserCode.get(userCode);
-        if (sessionId == null) {
-            throw new ResourceNotFoundException("User code not found");
-        }
-        return requireBySessionId(sessionId);
+    private AiAuthSession requireByUserCode(String userCode) {
+        return sessionRepository.findByUserCode(userCode)
+                .orElseThrow(() -> new ResourceNotFoundException("User code not found"));
     }
 
-    private SessionRecord requireByRefreshToken(String refreshToken) {
+    private AiAuthSession requireByRefreshToken(String refreshToken) {
         if (refreshToken == null || refreshToken.isBlank()) {
             throw new IllegalArgumentException("refreshToken is required");
         }
-        String sessionId = sessionIdByRefreshToken.get(refreshToken);
-        if (sessionId == null) {
-            throw new ResourceNotFoundException("Refresh token not found");
-        }
-        return requireBySessionId(sessionId);
+        return sessionRepository.findByRefreshToken(refreshToken)
+                .orElseThrow(() -> new ResourceNotFoundException("Refresh token not found"));
     }
 
-    private void ensureActiveSession(SessionRecord session) {
-        if (session.isExpired()) {
+    private void ensureAuthorizationActive(AiAuthSession session, Instant now) {
+        if (session.isAuthorizationExpired(now)) {
             throw new IllegalArgumentException("AI auth session expired");
         }
         if (session.isRevoked()) {
@@ -408,75 +386,33 @@ public class AiAuthSessionService {
         }
     }
 
-    private void ensureApprovedSession(SessionRecord session) {
-        ensureActiveSession(session);
+    private void ensureApproved(AiAuthSession session) {
         if (session.getApprovedAt() == null || session.getMerchantId() == null) {
             throw new IllegalArgumentException("AI auth session is not approved yet");
         }
     }
 
-    private void revokeInternal(SessionRecord session) {
+    private void ensureApprovedForTokenExchange(AiAuthSession session, Instant now) {
+        ensureAuthorizationActive(session, now);
+        ensureApproved(session);
+    }
+
+    private void ensureRefreshable(AiAuthSession session, Instant now) {
+        if (session.isRevoked()) {
+            throw new IllegalArgumentException("AI auth session revoked");
+        }
+        ensureApproved(session);
+        if (session.getRefreshTokenExpiresAt() == null || session.isRefreshExpired(now)) {
+            revokeInternal(session);
+            throw new IllegalArgumentException("Refresh token expired");
+        }
+    }
+
+    private void revokeInternal(AiAuthSession session) {
         session.setRevoked(true);
-        if (session.getRefreshToken() != null) {
-            sessionIdByRefreshToken.remove(session.getRefreshToken());
-        }
-        if (session.getAuthorizationCode() != null) {
-            sessionIdByAuthorizationCode.remove(session.getAuthorizationCode());
-        }
     }
 
     private void cleanupExpiredSessions() {
-        Instant now = Instant.now();
-        sessionsById.values().removeIf(session -> {
-            boolean expired = session.getExpiresAt().isBefore(now)
-                    || (session.getRefreshTokenExpiresAt() != null && session.getRefreshTokenExpiresAt().isBefore(now) && session.getApprovedAt() != null);
-            if (!expired) {
-                return false;
-            }
-            if (session.getDeviceCode() != null) {
-                sessionIdByDeviceCode.remove(session.getDeviceCode());
-            }
-            if (session.getUserCode() != null) {
-                sessionIdByUserCode.remove(session.getUserCode());
-            }
-            if (session.getAuthorizationCode() != null) {
-                sessionIdByAuthorizationCode.remove(session.getAuthorizationCode());
-            }
-            if (session.getRefreshToken() != null) {
-                sessionIdByRefreshToken.remove(session.getRefreshToken());
-            }
-            return true;
-        });
-    }
-
-    @lombok.Data
-    @lombok.Builder
-    private static class SessionRecord {
-        private String sessionId;
-        private AiAuthClientType clientType;
-        private String audience;
-        private AiAuthFlowMode flowMode;
-        private String callbackUrl;
-        private String state;
-        private String codeChallenge;
-        private String codeChallengeMethod;
-        private String userCode;
-        private String deviceCode;
-        private Instant expiresAt;
-        private Long merchantId;
-        private String merchantEmail;
-        private String merchantName;
-        private String merchantRole;
-        private Instant approvedAt;
-        private String authorizationCode;
-        private Instant authorizationCodeExpiresAt;
-        private boolean authorizationCodeConsumed;
-        private String refreshToken;
-        private Instant refreshTokenExpiresAt;
-        private boolean revoked;
-
-        boolean isExpired() {
-            return expiresAt != null && expiresAt.isBefore(Instant.now());
-        }
+        sessionRepository.deleteAllInBatch(sessionRepository.findExpiredSessions(Instant.now()));
     }
 }
