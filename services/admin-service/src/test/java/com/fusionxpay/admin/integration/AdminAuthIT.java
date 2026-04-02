@@ -215,4 +215,31 @@ public class AdminAuthIT extends AbstractIntegrationTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).contains(ADMIN_EMAIL);
     }
+
+    @Test
+    @DisplayName("Interactive AI session token can access protected endpoint")
+    void testProtectedEndpoint_WithInteractiveSessionToken_ReturnsSuccess() {
+        Merchant merchant = merchantRepository.findByEmailAndStatus(MERCHANT_EMAIL, MerchantStatus.ACTIVE)
+                .orElseThrow();
+        String token = jwtTokenProvider.generateToken(
+                merchant.getId(),
+                merchant.getEmail(),
+                merchant.getRole().name(),
+                "ai-cli",
+                "interactive-session",
+                30 * 60 * 1000L
+        );
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(token);
+
+        HttpEntity<Void> entity = new HttpEntity<>(headers);
+
+        ResponseEntity<String> response = restTemplate.exchange(
+                "/api/v1/admin/auth/me", HttpMethod.GET, entity, String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).contains(MERCHANT_EMAIL);
+    }
 }

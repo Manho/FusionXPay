@@ -116,4 +116,25 @@ class JwtTokenProviderTest {
         // Then
         assertThat(expirationSeconds).isEqualTo(TEST_EXPIRATION / 1000);
     }
+
+    @Test
+    void interactiveSessionToken_ShouldExposeAudienceAndRemainValid() {
+        // Given
+        String token = jwtTokenProvider.generateToken(
+                42L,
+                "merchant@example.com",
+                "MERCHANT",
+                "ai-cli",
+                "interactive-session",
+                TEST_EXPIRATION
+        );
+
+        // Then
+        assertThat(jwtTokenProvider.validateToken(token)).isTrue();
+        assertThat(jwtTokenProvider.getEmailFromToken(token)).isEqualTo("merchant@example.com");
+        assertThat(jwtTokenProvider.getMerchantIdFromToken(token)).isEqualTo(42L);
+        assertThat(jwtTokenProvider.getRoleFromToken(token)).isEqualTo("MERCHANT");
+        assertThat(jwtTokenProvider.getAudienceFromToken(token)).isEqualTo("ai-cli");
+        assertThat(jwtTokenProvider.getTokenType(token)).isEqualTo("interactive-session");
+    }
 }

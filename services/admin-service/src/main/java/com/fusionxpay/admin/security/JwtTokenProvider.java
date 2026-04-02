@@ -29,6 +29,16 @@ public class JwtTokenProvider {
         return jwtUtils.generateToken(new JwtClaims(merchantId, email, role), jwtExpiration);
     }
 
+    public String generateToken(Long merchantId,
+                                String email,
+                                String role,
+                                String audience,
+                                String tokenType,
+                                Long expirationMs) {
+        long resolvedExpiration = expirationMs == null ? jwtExpiration : expirationMs;
+        return jwtUtils.generateToken(new JwtClaims(merchantId, email, role, audience, tokenType), resolvedExpiration);
+    }
+
     /**
      * Get email from JWT token
      */
@@ -48,6 +58,14 @@ public class JwtTokenProvider {
      */
     public String getRoleFromToken(String token) {
         return jwtUtils.parseClaims(token).role();
+    }
+
+    public String getAudienceFromToken(String token) {
+        return jwtUtils.parseClaims(token).audience();
+    }
+
+    public String getTokenType(String token) {
+        return jwtUtils.parseClaims(token).tokenType();
     }
 
     /**

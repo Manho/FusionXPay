@@ -65,6 +65,17 @@ logging:
 
 fusionx:
   ai:
+    auth:
+      frontend-base-url: ${FUSIONX_AI_FRONTEND_BASE_URL:http://localhost:3000}
+      consent-path: ${FUSIONX_AI_CONSENT_PATH:/ai/consent}
+      device-path: ${FUSIONX_AI_DEVICE_PATH:/ai/device}
+      session-ttl: ${FUSIONX_AI_SESSION_TTL:10m}
+      authorization-code-ttl: ${FUSIONX_AI_AUTH_CODE_TTL:2m}
+      access-token-ttl: ${FUSIONX_AI_ACCESS_TOKEN_TTL:30m}
+      refresh-token-ttl: ${FUSIONX_AI_REFRESH_TOKEN_TTL:30d}
+      poll-interval: ${FUSIONX_AI_POLL_INTERVAL:3s}
+      allowed-audiences: ${FUSIONX_AI_ALLOWED_AUDIENCES:ai-cli,ai-mcp}
+      allowed-callback-hosts: ${FUSIONX_AI_ALLOWED_CALLBACK_HOSTS:127.0.0.1,localhost}
     audit:
       enabled: false
       topic: ${FUSIONX_AI_AUDIT_TOPIC:ai-audit-log}
