@@ -9,7 +9,7 @@ import com.fusionxpay.admin.model.MerchantRole;
 import com.fusionxpay.admin.model.MerchantStatus;
 import com.fusionxpay.admin.repository.MerchantRepository;
 import com.fusionxpay.admin.service.OrderService;
-import com.fusionxpay.common.test.AbstractIntegrationTest;
+import com.fusionxpay.common.test.AbstractDbRedisIntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -32,7 +32,7 @@ import static org.mockito.Mockito.when;
  * Integration tests for RBAC (Role-Based Access Control) in admin-service
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-public class AdminRBACIT extends AbstractIntegrationTest {
+public class AdminRBACIT extends AbstractDbRedisIntegrationTest {
 
     @Autowired
     private TestRestTemplate restTemplate;
