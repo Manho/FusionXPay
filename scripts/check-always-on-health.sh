@@ -20,6 +20,11 @@ if grep -q '^PLATFORM_AUDIT_SINK_ENABLED=' "${ENV_FILE}"; then
   PLATFORM_AUDIT_SINK_ENABLED="$(grep '^PLATFORM_AUDIT_SINK_ENABLED=' "${ENV_FILE}" | cut -d'=' -f2)"
 fi
 
+KAFKA_CONNECT_HEALTH_MAX_RETRIES="${KAFKA_CONNECT_HEALTH_MAX_RETRIES:-60}"
+if grep -q '^KAFKA_CONNECT_HEALTH_MAX_RETRIES=' "${ENV_FILE}"; then
+  KAFKA_CONNECT_HEALTH_MAX_RETRIES="$(grep '^KAFKA_CONNECT_HEALTH_MAX_RETRIES=' "${ENV_FILE}" | cut -d'=' -f2)"
+fi
+
 HEALTH_URL="http://localhost:${API_PORT}/actuator/health"
 GATEWAY_BASE_URL="http://localhost:${API_PORT}"
 MAX_RETRIES=30
@@ -74,7 +79,11 @@ echo "[INFO] Container status"
 docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" ps
 
 for container in "${CORE_CONTAINERS[@]}"; do
-  wait_for_container_health "${container}" 24 5
+  max_retries=24
+  if [[ "${container}" == "fusionxpay-kafka-connect" ]]; then
+    max_retries="${KAFKA_CONNECT_HEALTH_MAX_RETRIES}"
+  fi
+  wait_for_container_health "${container}" "${max_retries}" 5
 done
 
 echo "[INFO] Running authenticated gateway smoke checks"
