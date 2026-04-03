@@ -158,6 +158,7 @@ services:
       CONNECT_PLUGIN_PATH: /usr/share/java,/usr/share/confluent-hub-components
       CONNECT_LOG4J_ROOT_LOGLEVEL: INFO
       KAFKA_CONNECT_JDBC_CONNECTOR_VERSION: ${KAFKA_CONNECT_JDBC_CONNECTOR_VERSION:-10.7.6}
+      MYSQL_CONNECTOR_J_VERSION: ${MYSQL_CONNECTOR_J_VERSION:-8.4.0}
     command:
       - bash
       - -lc
@@ -166,6 +167,20 @@ services:
         plugin_dir="/usr/share/confluent-hub-components/confluentinc-kafka-connect-jdbc"
         if [[ ! -d "$${plugin_dir}" ]]; then
           confluent-hub install --no-prompt "confluentinc/kafka-connect-jdbc:$${KAFKA_CONNECT_JDBC_CONNECTOR_VERSION:-10.7.6}"
+        fi
+        mysql_driver_version="$${MYSQL_CONNECTOR_J_VERSION:-8.4.0}"
+        mysql_driver_jar="mysql-connector-j-$${mysql_driver_version}.jar"
+        mysql_driver_url="https://repo1.maven.org/maven2/com/mysql/mysql-connector-j/$${mysql_driver_version}/$${mysql_driver_jar}"
+        if [[ ! -f "$${plugin_dir}/lib/$${mysql_driver_jar}" ]]; then
+          mkdir -p "$${plugin_dir}/lib"
+          if command -v curl >/dev/null 2>&1; then
+            curl -fsSL "$${mysql_driver_url}" -o "$${plugin_dir}/lib/$${mysql_driver_jar}"
+          elif command -v wget >/dev/null 2>&1; then
+            wget -qO "$${plugin_dir}/lib/$${mysql_driver_jar}" "$${mysql_driver_url}"
+          else
+            echo "[ERROR] curl or wget is required to download MySQL Connector/J"
+            exit 1
+          fi
         fi
         /etc/confluent/docker/run
     volumes:
