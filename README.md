@@ -24,7 +24,7 @@
 FusionXPay is an **AI-native** payment platform built with Spring Cloud microservices. Beyond standard payment processing (Stripe and PayPal), webhook-driven status updates, refunds, and async notifications, FusionXPay ships with a full AI integration layer:
 
 - **MCP Server** — Exposes payment and order tools via the Model Context Protocol, allowing AI agents (e.g., Claude, Cursor) to query orders, initiate payments, and trigger refunds with AOP-enforced safety guards.
-- **AI CLI** — A Spring Shell–based command-line interface for AI agents and automation pipelines to interact with FusionXPay programmatically.
+- **AI CLI** — A picocli-based command-line interface for AI agents and automation pipelines to interact with FusionXPay programmatically.
 - **AI Auth** — An OAuth2-inspired browser-based consent flow that lets AI agents acquire scoped tokens for authorized API access.
 - **AI Audit** — All AI-originated tool invocations are persisted to Kafka (`ai-audit-log` topic) and consumed by Admin Service for compliance tracking.
 
@@ -51,7 +51,7 @@ FusionXPay is an **AI-native** payment platform built with Spring Cloud microser
 | Component | What it does |
 |-----------|--------------|
 | MCP Server | Exposes FusionXPay tools via Model Context Protocol; AOP safety pipeline guards all invocations |
-| AI CLI | Spring Shell CLI for AI agents to authenticate, query orders/payments, and trigger actions |
+| AI CLI | picocli-based CLI for AI agents to authenticate, query orders/payments, and trigger actions |
 | AI Common | Shared DTOs for AI auth flows (authorize, poll, consent, token exchange, revoke) |
 
 ### Infrastructure
@@ -60,7 +60,7 @@ FusionXPay is an **AI-native** payment platform built with Spring Cloud microser
 |-----------|---------|
 | MySQL | Persistence for all services |
 | Redis | Rate limiting (gateway) and caching/idempotency (payment) |
-| Kafka | Event bus — `payment-events`, `ai-audit-log` topics |
+| Kafka | Event bus — `payment-events` (payment→order), `order-events` (order→notification), `ai-audit-log` (AI audit) |
 | Eureka | Service discovery |
 | Prometheus + Grafana + Loki | Metrics, dashboards, and centralized log aggregation |
 
@@ -75,14 +75,15 @@ The MCP Server (`ai/ai-mcp-server`) implements the [Model Context Protocol](http
 **Available tools** (via `FusionXMcpTools`):
 
 | Tool | Description |
-|------|-------------|
-| `get_order` | Retrieve order details by ID |
-| `search_orders` | Search orders with filters |
-| `get_payment` | Get payment transaction details |
-| `search_payments` | Search payments with filters |
-| `pay` | Initiate a payment for an order |
-| `confirm_payment` | Confirm a pending payment |
-| `refund_payment` | Issue a refund for a payment |
+|------|--------------|
+| `get_order` | Retrieve full order details by order ID or order number |
+| `get_order_status` | Get only the status projection for an order |
+| `search_orders` | Search merchant orders with optional status, order number, and date filters |
+| `query_payment` | Query a payment by transaction ID or order ID |
+| `search_payments` | Search merchant payments with optional status and date filters |
+| `initiate_payment` | Prepare a payment request — returns `CONFIRMATION_REQUIRED`; must be followed by `confirm_action` |
+| `refund_payment` | Prepare a refund request — returns `CONFIRMATION_REQUIRED`; must be followed by `confirm_action` |
+| `confirm_action` | Execute a previously prepared write action using its confirmation token |
 
 **AOP Safety Pipeline** — every tool call passes through three aspects in sequence:
 
@@ -96,7 +97,7 @@ InputSafetyAspect → ToolAuditAspect → OutputSafetyAspect
 
 ### AI CLI
 
-The AI CLI (`ai/ai-cli`) is a Spring Shell application that AI agents or automated pipelines can invoke from the command line.
+The AI CLI (`ai/ai-cli`) is a **picocli**-based Spring Boot application that AI agents or automated pipelines can invoke from the command line.
 
 **Available command groups:**
 
@@ -116,20 +117,26 @@ The AI CLI (`ai/ai-cli`) is a Spring Shell application that AI agents or automat
 
 ### AI Auth Flow
 
-AI agents obtain scoped access tokens through an OAuth2-inspired browser consent flow managed by Admin Service:
+AI agents obtain scoped access tokens through a **device-code** consent flow managed by Admin Service (`POST /api/v1/admin/auth/ai/*`). The two-phase poll-then-token exchange is intentional — poll returns only a status, and the token is obtained in a separate `POST /token` call once the status is `APPROVED`.
 
 <p align="center">
   <img src="docs/design/diagrams/ai-auth-flow.png" alt="AI Agent Authorization Flow" width="760">
 </p>
 
+> **API base path:** `POST http://localhost:8080/api/v1/admin/auth/ai/{endpoint}` (via API Gateway on port 8080)
+
 ### AI Audit Log
 
-Every AI tool invocation is recorded to MySQL via Kafka:
+Every AI-originated action — whether from the MCP Server or the CLI — is recorded to MySQL via Kafka:
 
-1. `ToolAuditAspect` publishes an event to the `ai-audit-log` Kafka topic
-2. `AiAuditEventConsumer` in Admin Service consumes from the topic
-3. Events are persisted to the `ai_audit_log` table for compliance review
-4. Admins can query audit logs via the Admin Service API
+**MCP Server path:** `ToolAuditAspect` (AOP) → publishes `AuditEvent` with `source=MCP` to `ai-audit-log` topic
+
+**CLI path:** `CliExecutionStrategy` (picocli execution hook) → publishes `AuditEvent` with `source=CLI` to `ai-audit-log` topic
+
+Both paths converge at:
+1. `AiAuditEventConsumer` in Admin Service consumes from the `ai-audit-log` topic
+2. Events are persisted to the `ai_audit_log` table for compliance review
+3. Admins can query audit logs via the Admin Service API
 
 ---
 
@@ -172,7 +179,7 @@ docker compose -f docker-compose.always-on.yml --env-file .env.always-on up -d -
 | Endpoint | Purpose |
 |----------|---------|
 | `http://localhost:8080/actuator/health` | Gateway health |
-| `http://localhost:8084/ai/auth/authorize` | AI Agent auth entry point |
+| `http://localhost:8080/api/v1/admin/auth/ai/authorize` | AI Agent auth entry point (via gateway) |
 | `http://localhost:3001` | Grafana dashboards |
 | `http://localhost:9090` | Prometheus |
 | `http://localhost:3100` | Loki log query |
