@@ -16,7 +16,7 @@ Provide a secure, scalable, and modular payment gateway that supports multiple p
 
 Below is a conceptual diagram incorporating enterprise requirements such as end-to-end transaction management, robust security checks, and centralized logging.
 
-![Architecture Diagram](./diagrams/architecture.svg)
+![Architecture Diagram](./diagrams/architecture.png)
 
 
 ### Components:
