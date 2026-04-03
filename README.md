@@ -10,8 +10,9 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Java-21-orange?style=flat-square&logo=openjdk" alt="Java 21">
-  <img src="https://img.shields.io/badge/Spring%20Boot-3.2-brightgreen?style=flat-square&logo=springboot" alt="Spring Boot 3.2">
-  <img src="https://img.shields.io/badge/Spring%20Cloud-2023-0A8FDC?style=flat-square" alt="Spring Cloud 2023">
+  <img src="https://img.shields.io/badge/Spring%20Boot-3.5.13-brightgreen?style=flat-square&logo=springboot" alt="Spring Boot 3.5.13">
+  <img src="https://img.shields.io/badge/Spring%20Cloud-2025.0.1-0A8FDC?style=flat-square" alt="Spring Cloud 2025.0.1">
+  <img src="https://img.shields.io/badge/Spring%20AI-1.1.4-6DB33F?style=flat-square" alt="Spring AI 1.1.4">
   <img src="https://img.shields.io/badge/MCP-Model%20Context%20Protocol-7C3AED?style=flat-square" alt="MCP">
   <img src="https://img.shields.io/badge/Testing-JUnit%20%7C%20Testcontainers%20%7C%20WireMock-6E56CF?style=flat-square" alt="Testing stack">
   <img src="https://img.shields.io/badge/Observability-Prometheus%20%2B%20Grafana%20%2B%20Loki-EA580C?style=flat-square" alt="Observability stack">
@@ -40,7 +41,7 @@ FusionXPay is an **AI-native** payment platform built with Spring Cloud microser
 
 | Service | Port | What it does |
 |---------|------|--------------|
-| API Gateway | 8080 | Routes requests, enforces API key auth, Redis-backed rate limiting |
+| API Gateway | 8080 | Routes requests, enforces JWT Bearer auth, Redis-backed rate limiting |
 | Order Service | 8082 | Order lifecycle, merchant-scoped data isolation |
 | Payment Service | 8081 | Provider integration (Stripe/PayPal), webhook handling, refunds |
 | Notification Service | 8083 | Kafka-driven async notification delivery |
@@ -117,13 +118,18 @@ The AI CLI (`ai/ai-cli`) is a **picocli**-based Spring Boot application that AI 
 
 ### AI Auth Flow
 
-AI agents obtain scoped access tokens through a **device-code** consent flow managed by Admin Service (`POST /api/v1/admin/auth/ai/*`). The two-phase poll-then-token exchange is intentional — poll returns only a status, and the token is obtained in a separate `POST /token` call once the status is `APPROVED`.
+AI agents obtain scoped access tokens through a browser-based consent flow managed by Admin Service (`POST /api/v1/admin/auth/ai/*`). The flow mode depends on the client:
+
+- **CLI** — attempts a **callback flow** first (PKCE + local HTTP server on `127.0.0.1` to receive the redirect); if that fails (e.g., no browser or port conflict), it falls back to the **device-code flow** where the user visits a verification URL manually.
+- **MCP** — uses the **device-code flow** directly, since MCP clients run headlessly without a local callback server.
+
+Both flows share a two-phase poll-then-token exchange: poll returns only a status, and the token is obtained in a separate `POST /token` call once the status is `APPROVED`.
 
 <p align="center">
   <img src="docs/design/diagrams/ai-auth-flow.png" alt="AI Agent Authorization Flow" width="760">
 </p>
 
-> **API base path:** `POST http://localhost:8080/api/v1/admin/auth/ai/{endpoint}` (via API Gateway on port 8080)
+> **API base path:** `http://localhost:8080/api/v1/admin/auth/ai/{endpoint}` (via API Gateway on port 8080; browser approval uses `GET /consent`, token/session operations use `POST`)
 
 ### AI Audit Log
 
@@ -235,7 +241,7 @@ FusionXPay/
 │   └── admin-service/         # Admin/merchant APIs, AI auth sessions, AI audit log
 ├── ai/
 │   ├── ai-mcp-server/         # Model Context Protocol server with AOP safety pipeline
-│   ├── ai-cli/                # Spring Shell CLI for AI agent interactions
+│   ├── ai-cli/                # picocli-based CLI for AI agent interactions
 │   └── ai-common/             # Shared DTOs for AI auth flows
 ├── common/                    # Shared DTOs and utilities
 ├── mysql-init/                # Database initialization scripts
