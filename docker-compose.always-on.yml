@@ -165,7 +165,7 @@ services:
         set -euo pipefail
         plugin_dir="/usr/share/confluent-hub-components/confluentinc-kafka-connect-jdbc"
         if [[ ! -d "$${plugin_dir}" ]]; then
-          confluent-hub install --no-prompt "confluentinc/kafka-connect-jdbc:${KAFKA_CONNECT_JDBC_CONNECTOR_VERSION}"
+          confluent-hub install --no-prompt "confluentinc/kafka-connect-jdbc:$${KAFKA_CONNECT_JDBC_CONNECTOR_VERSION:-10.7.6}"
         fi
         /etc/confluent/docker/run
     volumes:
