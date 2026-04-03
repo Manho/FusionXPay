@@ -118,17 +118,9 @@ The AI CLI (`ai/ai-cli`) is a Spring Shell application that AI agents or automat
 
 AI agents obtain scoped access tokens through an OAuth2-inspired browser consent flow managed by Admin Service:
 
-```
-AI Agent                     Admin Service               Merchant (Browser)
-   │                               │                              │
-   │── POST /ai/auth/authorize ───►│                              │
-   │◄─ { sessionId, consentUrl } ──│                              │
-   │                               │◄─── Merchant opens URL ──────│
-   │── GET  /ai/auth/poll ────────►│    (Consent approval)        │
-   │◄─ { status: APPROVED, token } │                              │
-   │    (when merchant approves)   │                              │
-   │── DELETE /ai/auth/revoke ────►│                              │
-```
+<p align="center">
+  <img src="docs/design/diagrams/ai-auth-flow.png" alt="AI Agent Authorization Flow" width="760">
+</p>
 
 ### AI Audit Log
 
