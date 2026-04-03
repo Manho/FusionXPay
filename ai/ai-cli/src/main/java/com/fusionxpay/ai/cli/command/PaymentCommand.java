@@ -6,6 +6,7 @@ import picocli.CommandLine.Command;
 @Component
 @Command(
         name = "payment",
+        mixinStandardHelpOptions = true,
         description = "Payment commands",
         subcommands = {
                 PaymentQueryCommand.class,

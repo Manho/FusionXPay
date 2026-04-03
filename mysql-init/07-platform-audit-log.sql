@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS platform_audit_log (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    event_id VARCHAR(36) NOT NULL UNIQUE,
+    timestamp TIMESTAMP NOT NULL,
+    correlation_id VARCHAR(36) NOT NULL,
+    source VARCHAR(32) NOT NULL,
+    action_name VARCHAR(128) NOT NULL,
+    merchant_id BIGINT NULL,
+    audience VARCHAR(64) NULL,
+    http_method VARCHAR(16) NULL,
+    path VARCHAR(255) NOT NULL,
+    status_code INT NULL,
+    duration_ms BIGINT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_platform_audit_merchant (merchant_id),
+    INDEX idx_platform_audit_source (source),
+    INDEX idx_platform_audit_action (action_name),
+    INDEX idx_platform_audit_correlation (correlation_id),
+    INDEX idx_platform_audit_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

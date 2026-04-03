@@ -7,11 +7,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import picocli.CommandLine;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(properties = {
-        "fusionx.ai.cli.runner-enabled=false",
-        "fusionx.ai.audit.enabled=false"
+        "fusionx.ai.cli.runner-enabled=false"
 })
 class CliCommandLineFactoryTest {
 
@@ -32,5 +34,20 @@ class CliCommandLineFactoryTest {
         CommandLine.ParseResult parseResult = commandLine.parseArgs("payment", "confirm", "--token", "abc");
         Object command = parseResult.asCommandLineList().get(parseResult.asCommandLineList().size() - 1).getCommand();
         assertThat(command).isInstanceOf(PaymentConfirmCommand.class);
+    }
+
+    @Test
+    void paymentCommandSupportsHelpOption() {
+        CommandLine commandLine = cliCommandLineFactory.create();
+        StringWriter out = new StringWriter();
+        StringWriter err = new StringWriter();
+        commandLine.setOut(new PrintWriter(out, true));
+        commandLine.setErr(new PrintWriter(err, true));
+
+        int exitCode = commandLine.execute("payment", "--help");
+
+        assertThat(exitCode).isZero();
+        assertThat(out.toString()).contains("Usage: fusionx payment");
+        assertThat(err.toString()).isEmpty();
     }
 }

@@ -78,6 +78,7 @@ class JwtAuthFilterTest {
         assertTrue(chain.wasCalled());
         assertEquals("42", chain.getForwardedHeader("X-Merchant-Id"));
         assertEquals("MERCHANT", chain.getForwardedHeader("X-Merchant-Role"));
+        assertEquals(Long.valueOf(42L), exchange.getAttribute("fusionx.audit.merchantId"));
     }
 
     @Test

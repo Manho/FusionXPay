@@ -4,8 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
 @SpringBootTest(properties = {
-        "spring.ai.mcp.server.enabled=false",
-        "fusionx.ai.audit.enabled=false"
+        "spring.ai.mcp.server.enabled=false"
 })
 class AiMcpServerApplicationTests {
 

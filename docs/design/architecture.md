@@ -16,17 +16,21 @@ Provide a secure, scalable, and modular payment gateway that supports multiple p
 
 Below is a conceptual diagram incorporating enterprise requirements such as end-to-end transaction management, robust security checks, and centralized logging.
 
-![Architecture Diagram](./diagrams/architecture.svg)
+![Architecture Diagram](./diagrams/architecture.png)
 
 
 ### Components:
-- **API Gateway**: Handles request routing, authentication, and security policies.
-- **Order Service**: Manages order lifecycle and persistence, subscribes to order status update messages.
-- **Payment Service**: Processes payment requests, interfaces with payment providers, handles callbacks, and publishes status update messages.
-- **Notification Service**: Subscribes to payment result messages and sends notifications to merchants.
-- **Message Queue (Kafka/RabbitMQ)**: Core communication infrastructure that enables reliable, asynchronous message delivery between services.
-- **Databases & Cache**: Persistent storage and caching mechanisms.
-- **Monitoring & Logging**: Observability stack for real-time analysis.
+- **API Gateway** (port 8080): Handles request routing, JWT bearer authentication, Redis-backed rate limiting, service discovery via Eureka, and emits `platform-audit-log` ingress events.
+- **Order Service** (port 8082): Manages order lifecycle and merchant-scoped data isolation; consumes `payment-events` from Kafka to update order status.
+- **Payment Service** (port 8081): Processes payment requests via Stripe/PayPal, handles webhooks, manages refunds, and publishes to the `payment-events` Kafka topic.
+- **Notification Service** (port 8083): Consumes the `order-events` Kafka topic and sends async notifications to merchants on payment success or failure.
+- **Admin Service** (port 8084): JWT-authenticated admin/merchant management and AI auth session flow.
+- **MCP Server**: Exposes FusionXPay as a Model Context Protocol (MCP) tool provider. Tool invocations pass through an AOP pipeline (`InputSafetyAspect → ToolAuditAspect → OutputSafetyAspect`), where `ToolAuditAspect` contributes `X-Audit-*` metadata rather than publishing Kafka events directly.
+- **AI CLI**: picocli-based Spring Boot CLI for AI agents; `CliExecutionStrategy` contributes `X-Audit-*` metadata to every gateway-bound request.
+- **Apache Kafka**: Event bus with three active topics — `payment-events`, `order-events`, and `platform-audit-log`.
+- **MySQL**: Shared persistent storage for all services.
+- **Redis**: Rate limiting (gateway) and idempotency/caching (payment service).
+- **Monitoring & Logging**: Prometheus + Grafana + Loki + Promtail for metrics, dashboards, and centralized log aggregation.
 
 ## 3. Microservices Breakdown
 
@@ -35,7 +39,7 @@ Below is a conceptual diagram incorporating enterprise requirements such as end-
 - **Responsibilities**:
   - Routes external requests (e.g., `/api/orders`, `/api/payment/request`, `/api/payment/callback`) to internal services.
   - Implements rate-limiting, authentication, and IP whitelisting.
-  - Logs request metadata for audits (request time, user ID, correlation ID).
+  - Logs ingress request metadata for platform audit (request time, source, merchant ID, correlation ID).
 
 ### 3.2 Order Service
 - **Endpoints**:
@@ -66,11 +70,11 @@ Below is a conceptual diagram incorporating enterprise requirements such as end-
   - Logs notification delivery for traceability.
 
 ### 3.5 Message Queue System
-- **Tech**: Kafka or RabbitMQ
-- **Topics/Queues**:
-  - `order-status-updates` - For updating order status to PROCESSING
-  - `order-status-finalize` - For updating order status to SUCCESS/FAILED
-  - `payment-notifications` - For triggering merchant notifications
+- **Tech**: Apache Kafka
+- **Topics**:
+  - `payment-events` — Payment Service publishes status updates; Order Service consumes to update order status
+  - `order-events` — Order Service publishes final payment outcomes; Notification Service consumes to send merchant notifications
+  - `platform-audit-log` — API Gateway publishes one ingress audit event for every external request; MCP/CLI enrich requests with `X-Audit-*` metadata so source and action names are preserved downstream
 - **Properties**:
   - Persistent message storage
   - Delivery guarantees
@@ -148,4 +152,3 @@ Below is a conceptual diagram incorporating enterprise requirements such as end-
 
 ## Conclusion
 FusionXPay's message-driven microservices architecture ensures scalability, security, and reliability while allowing for future expansion. The decoupled services communicating via message queues provide flexibility for component updates and failure isolation. This approach balances compliance needs with flexibility, positioning the platform for enterprise-grade payment processing.
-

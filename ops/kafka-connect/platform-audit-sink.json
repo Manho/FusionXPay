@@ -1,0 +1,21 @@
+{
+  "name": "platform-audit-log-mysql-sink",
+  "config": {
+    "connector.class": "io.confluent.connect.jdbc.JdbcSinkConnector",
+    "tasks.max": "1",
+    "topics": "platform-audit-log",
+    "connection.url": "jdbc:mysql://mysql:3306/fusionxpay_db?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC",
+    "connection.user": "root",
+    "connection.password": "root",
+    "insert.mode": "insert",
+    "table.name.format": "platform_audit_log",
+    "pk.mode": "none",
+    "auto.create": "false",
+    "auto.evolve": "false",
+    "delete.enabled": "false",
+    "quote.sql.identifiers": "never",
+    "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter.schemas.enable": "false"
+  }
+}
