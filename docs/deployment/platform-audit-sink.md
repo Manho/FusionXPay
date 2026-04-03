@@ -56,5 +56,7 @@ curl -X POST http://<connect-host>:8083/connectors \
 ## Notes
 
 - API Gateway remains the only producer for `platform-audit-log`.
+- API Gateway publishes Kafka Connect-compatible JSON with an explicit schema envelope; the JDBC sink is configured with `value.converter.schemas.enable=true`.
 - CLI and MCP do not publish Kafka events directly; they only attach `X-Audit-*` metadata to gateway-bound requests.
 - `platform_audit_log` must exist before the connector starts.
+- `consumer.override.auto.offset.reset=latest` lets the sink skip any stale bootstrap records from earlier incompatible connector revisions.

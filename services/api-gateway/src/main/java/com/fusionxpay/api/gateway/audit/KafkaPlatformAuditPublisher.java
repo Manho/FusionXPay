@@ -10,13 +10,14 @@ import org.springframework.kafka.core.KafkaTemplate;
 @RequiredArgsConstructor
 public class KafkaPlatformAuditPublisher implements PlatformAuditPublisher {
 
-    private final KafkaTemplate<String, PlatformAuditEvent> kafkaTemplate;
+    private final KafkaTemplate<String, String> kafkaTemplate;
+    private final PlatformAuditConnectPayloadFactory payloadFactory;
     private final PlatformAuditProperties properties;
 
     @Override
     public void publish(PlatformAuditEvent event) {
         try {
-            kafkaTemplate.send(properties.getTopic(), event.getCorrelationId(), event)
+            kafkaTemplate.send(properties.getTopic(), event.getCorrelationId(), payloadFactory.toConnectJson(event))
                     .whenComplete((result, throwable) -> {
                         if (throwable != null) {
                             log.warn("Failed to publish platform audit event {}", event.getEventId(), throwable);
