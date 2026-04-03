@@ -6,6 +6,7 @@ import picocli.CommandLine.Command;
 @Component
 @Command(
         name = "order",
+        mixinStandardHelpOptions = true,
         description = "Order commands",
         subcommands = {
                 OrderGetCommand.class,

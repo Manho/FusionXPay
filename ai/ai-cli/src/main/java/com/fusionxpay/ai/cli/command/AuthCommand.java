@@ -6,6 +6,7 @@ import picocli.CommandLine.Command;
 @Component
 @Command(
         name = "auth",
+        mixinStandardHelpOptions = true,
         description = "Authentication commands",
         subcommands = {
                 AuthLoginCommand.class,
