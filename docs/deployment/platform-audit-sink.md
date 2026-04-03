@@ -34,6 +34,7 @@ The deployment host must expose a working `.env.always-on` with:
 - `KAFKA_BOOTSTRAP_SERVERS`
 - `KAFKA_CONNECT_URL` or `KAFKA_CONNECT_PORT`
 - `FUSIONX_PLATFORM_AUDIT_TOPIC`
+- `MYSQL_CONNECTOR_J_VERSION` when you need to override the bundled MySQL JDBC driver download
 
 Cold starts for `cp-kafka-connect` can take a few minutes because the JDBC plugin is installed at container startup.
 If your host or network is slower, tune these optional env vars in `.env.always-on`:
