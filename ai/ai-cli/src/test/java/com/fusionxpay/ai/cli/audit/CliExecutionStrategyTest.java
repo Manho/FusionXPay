@@ -1,67 +1,63 @@
 package com.fusionxpay.ai.cli.audit;
 
-import com.fusionxpay.ai.cli.config.CliConfigStore;
-import com.fusionxpay.ai.cli.config.CliStoredConfig;
-import com.fusionxpay.ai.common.audit.AuditEvent;
-import com.fusionxpay.ai.common.audit.AuditEventPublisher;
-import com.fusionxpay.ai.common.audit.AuditStatus;
+import com.fusionxpay.ai.common.audit.AuditRequestMetadata;
+import com.fusionxpay.ai.common.audit.ThreadLocalAuditRequestMetadataProvider;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 
-import java.util.Optional;
 import java.util.concurrent.Callable;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 class CliExecutionStrategyTest {
 
     @Test
-    void publishesSuccessAuditForSuccessfulCommand() {
-        AuditEventPublisher publisher = mock(AuditEventPublisher.class);
-        CliConfigStore configStore = mock(CliConfigStore.class);
-        when(configStore.load()).thenReturn(Optional.of(CliStoredConfig.builder().merchantId(88L).build()));
-
-        CliExecutionStrategy strategy = new CliExecutionStrategy(publisher, configStore);
-        CommandLine commandLine = new CommandLine(new SuccessfulCommand());
+    void exposesAuditMetadataDuringCommandExecution() {
+        ThreadLocalAuditRequestMetadataProvider provider = new ThreadLocalAuditRequestMetadataProvider();
+        AtomicReference<AuditRequestMetadata> captured = new AtomicReference<>();
+        CliExecutionStrategy strategy = new CliExecutionStrategy(provider);
+        CommandLine commandLine = new CommandLine(new SuccessfulCommand(provider, captured));
         commandLine.setExecutionStrategy(strategy);
 
         int exitCode = commandLine.execute();
 
         assertThat(exitCode).isEqualTo(0);
-        ArgumentCaptor<AuditEvent> captor = ArgumentCaptor.forClass(AuditEvent.class);
-        verify(publisher).publish(captor.capture());
-        assertThat(captor.getValue().getStatus()).isEqualTo(AuditStatus.SUCCESS);
-        assertThat(captor.getValue().getMerchantId()).isEqualTo(88L);
+        assertThat(captured.get()).isNotNull();
+        assertThat(captured.get().source()).isEqualTo("CLI-Java");
+        assertThat(captured.get().actionName()).isEqualTo("test.ok");
+        assertThat(captured.get().correlationId()).isNotBlank();
+        assertThat(provider.currentMetadata()).isNull();
     }
 
     @Test
-    void publishesFailureAuditForNonZeroExitCommand() {
-        AuditEventPublisher publisher = mock(AuditEventPublisher.class);
-        CliConfigStore configStore = mock(CliConfigStore.class);
-        when(configStore.load()).thenReturn(Optional.empty());
-
-        CliExecutionStrategy strategy = new CliExecutionStrategy(publisher, configStore);
-        CommandLine commandLine = new CommandLine(new FailingCommand());
+    void clearsAuditMetadataAfterNonZeroExitCommand() {
+        ThreadLocalAuditRequestMetadataProvider provider = new ThreadLocalAuditRequestMetadataProvider();
+        CliExecutionStrategy strategy = new CliExecutionStrategy(provider);
+        CommandLine commandLine = new CommandLine(new FailingCommand(provider));
         commandLine.setExecutionStrategy(strategy);
 
         int exitCode = commandLine.execute();
 
         assertThat(exitCode).isEqualTo(7);
-        ArgumentCaptor<AuditEvent> captor = ArgumentCaptor.forClass(AuditEvent.class);
-        verify(publisher).publish(captor.capture());
-        assertThat(captor.getValue().getStatus()).isEqualTo(AuditStatus.FAILURE);
-        assertThat(captor.getValue().getOutputSummary()).contains("exitCode=7");
+        assertThat(provider.currentMetadata()).isNull();
     }
 
     @Command(name = "ok")
     static class SuccessfulCommand implements Callable<Integer>, CliAuditableCommand {
+        private final ThreadLocalAuditRequestMetadataProvider provider;
+        private final AtomicReference<AuditRequestMetadata> captured;
+
+        SuccessfulCommand(ThreadLocalAuditRequestMetadataProvider provider,
+                          AtomicReference<AuditRequestMetadata> captured) {
+            this.provider = provider;
+            this.captured = captured;
+        }
+
         @Override
         public Integer call() {
+            captured.set(provider.currentMetadata());
             return 0;
         }
 
@@ -83,8 +79,15 @@ class CliExecutionStrategyTest {
 
     @Command(name = "fail")
     static class FailingCommand implements Callable<Integer>, CliAuditableCommand {
+        private final ThreadLocalAuditRequestMetadataProvider provider;
+
+        FailingCommand(ThreadLocalAuditRequestMetadataProvider provider) {
+            this.provider = provider;
+        }
+
         @Override
         public Integer call() {
+            assertThat(provider.currentMetadata()).isNotNull();
             return 7;
         }
 

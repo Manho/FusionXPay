@@ -147,6 +147,11 @@ management:
 jwt:
   secret: ${JWT_SECRET:fusionxpay-admin-jwt-secret-key-must-be-at-least-256-bits-long}
 
+fusionx:
+  platform:
+    audit:
+      enabled: false
+
 app:
   rate-limit:
     login:

@@ -1,7 +1,6 @@
 package com.fusionxpay.ai.cli.command.support;
 
 import com.fusionxpay.ai.cli.audit.CliAuditableCommand;
-import com.fusionxpay.ai.common.audit.AuditStatus;
 import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Spec;
 
@@ -13,7 +12,6 @@ public abstract class AbstractCliLeafCommand implements CliAuditableCommand {
     protected CommandSpec spec;
 
     private String auditOutputSummary = "";
-    private AuditStatus auditStatus = AuditStatus.SUCCESS;
 
     protected PrintWriter out() {
         return spec.commandLine().getOut();
@@ -27,17 +25,8 @@ public abstract class AbstractCliLeafCommand implements CliAuditableCommand {
         this.auditOutputSummary = auditOutputSummary;
     }
 
-    protected void setAuditStatus(AuditStatus auditStatus) {
-        this.auditStatus = auditStatus;
-    }
-
     @Override
     public String auditOutputSummary() {
         return auditOutputSummary;
-    }
-
-    @Override
-    public AuditStatus auditStatus() {
-        return auditStatus;
     }
 }

@@ -7,8 +7,6 @@ spring:
     name: admin-service
   lifecycle:
     timeout-per-shutdown-phase: 15s
-  kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
   datasource:
     url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:fusionxpay_db}?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC
     username: ${DB_USERNAME:root}
@@ -76,13 +74,6 @@ fusionx:
       poll-interval: ${FUSIONX_AI_POLL_INTERVAL:3s}
       allowed-audiences: ${FUSIONX_AI_ALLOWED_AUDIENCES:ai-cli,ai-mcp}
       allowed-callback-hosts: ${FUSIONX_AI_ALLOWED_CALLBACK_HOSTS:127.0.0.1,localhost}
-    audit:
-      enabled: false
-      topic: ${FUSIONX_AI_AUDIT_TOPIC:ai-audit-log}
-      consumer:
-        group: ${FUSIONX_AI_AUDIT_CONSUMER_GROUP:admin-service-ai-audit}
-        enabled: ${FUSIONX_AI_AUDIT_CONSUMER_ENABLED:true}
-        dlt-topic: ${FUSIONX_AI_AUDIT_DLT_TOPIC:ai-audit-log.DLT}
 
 # OpenAPI
 springdoc:

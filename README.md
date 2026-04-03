@@ -27,7 +27,7 @@ FusionXPay is an **AI-native** payment platform built with Spring Cloud microser
 - **MCP Server** — Exposes payment and order tools via the Model Context Protocol, allowing AI agents (e.g., Claude, Cursor) to query orders, initiate payments, and trigger refunds with AOP-enforced safety guards.
 - **AI CLI** — A picocli-based command-line interface for AI agents and automation pipelines to interact with FusionXPay programmatically.
 - **AI Auth** — An OAuth2-inspired browser-based consent flow that lets AI agents acquire scoped tokens for authorized API access.
-- **AI Audit** — All AI-originated tool invocations are persisted to Kafka (`ai-audit-log` topic) and consumed by Admin Service for compliance tracking.
+- **Platform Audit** — API Gateway emits ingress audit events to Kafka (`platform-audit-log` topic) for every external request, while CLI/MCP attach `X-Audit-*` metadata for source/action attribution.
 
 ---
 
@@ -41,11 +41,11 @@ FusionXPay is an **AI-native** payment platform built with Spring Cloud microser
 
 | Service | Port | What it does |
 |---------|------|--------------|
-| API Gateway | 8080 | Routes requests, enforces JWT Bearer auth, Redis-backed rate limiting |
+| API Gateway | 8080 | Routes requests, enforces JWT Bearer auth, Redis-backed rate limiting, emits platform audit events |
 | Order Service | 8082 | Order lifecycle, merchant-scoped data isolation |
 | Payment Service | 8081 | Provider integration (Stripe/PayPal), webhook handling, refunds |
 | Notification Service | 8083 | Kafka-driven async notification delivery |
-| Admin Service | 8084 | JWT-authenticated admin/merchant management, AI auth sessions, AI audit log consumer |
+| Admin Service | 8084 | JWT-authenticated admin/merchant management and AI auth sessions |
 
 ### AI Layer
 
@@ -61,7 +61,7 @@ FusionXPay is an **AI-native** payment platform built with Spring Cloud microser
 |-----------|---------|
 | MySQL | Persistence for all services |
 | Redis | Rate limiting (gateway) and caching/idempotency (payment) |
-| Kafka | Event bus — `payment-events` (payment→order), `order-events` (order→notification), `ai-audit-log` (AI audit) |
+| Kafka | Event bus — `payment-events` (payment→order), `order-events` (order→notification), `platform-audit-log` (gateway ingress audit) |
 | Eureka | Service discovery |
 | Prometheus + Grafana + Loki | Metrics, dashboards, and centralized log aggregation |
 
@@ -93,7 +93,7 @@ InputSafetyAspect → ToolAuditAspect → OutputSafetyAspect
 ```
 
 - `InputSafetyAspect` — validates and sanitizes tool inputs before execution
-- `ToolAuditAspect` — emits a Kafka event to `ai-audit-log` for every invocation
+- `ToolAuditAspect` — attaches MCP audit metadata (`X-Audit-*`) to downstream gateway-bound requests
 - `OutputSafetyAspect` — redacts or prevents sensitive data from leaking to the AI agent
 
 ### AI CLI
@@ -131,18 +131,18 @@ Both flows share a two-phase poll-then-token exchange: poll returns only a statu
 
 > **API base path:** `http://localhost:8080/api/v1/admin/auth/ai/{endpoint}` (via API Gateway on port 8080; browser approval uses `GET /consent`, token/session operations use `POST`)
 
-### AI Audit Log
+### Platform Audit
 
-Every AI-originated action — whether from the MCP Server or the CLI — is recorded to MySQL via Kafka:
+Every external request that crosses API Gateway is recorded to Kafka and can be persisted to MySQL through Kafka Connect:
 
-**MCP Server path:** `ToolAuditAspect` (AOP) → publishes `AuditEvent` with `source=MCP` to `ai-audit-log` topic
+**MCP Server path:** `ToolAuditAspect` (AOP) → injects `X-Audit-Source=MCP-Java`, tool action name, and a correlation ID into each gateway request
 
-**CLI path:** `CliExecutionStrategy` (picocli execution hook) → publishes `AuditEvent` with `source=CLI` to `ai-audit-log` topic
+**CLI path:** `CliExecutionStrategy` (picocli execution hook) → injects `X-Audit-Source=CLI-Java`, command action name, and a correlation ID into each gateway request
 
 Both paths converge at:
-1. `AiAuditEventConsumer` in Admin Service consumes from the `ai-audit-log` topic
-2. Events are persisted to the `ai_audit_log` table for compliance review
-3. Admins can query audit logs via the Admin Service API
+1. `GatewayAuditFilter` emits a `PlatformAuditEvent` to the `platform-audit-log` topic for every inbound request
+2. Kafka Connect JDBC Sink persists events to the `platform_audit_log` table
+3. Source/action attribution remains consistent across CLI, MCP, and future SDK clients through the shared `X-Audit-*` contract
 
 ---
 
@@ -234,11 +234,11 @@ mvn test -pl ai/ai-cli
 ```text
 FusionXPay/
 ├── services/
-│   ├── api-gateway/           # Spring Cloud Gateway, rate limiting, auth routing
+│   ├── api-gateway/           # Spring Cloud Gateway, rate limiting, auth routing, platform audit emission
 │   ├── order-service/         # Order lifecycle and merchant isolation
 │   ├── payment-service/       # Provider integration, webhooks, refunds
 │   ├── notification-service/  # Kafka-driven notifications
-│   └── admin-service/         # Admin/merchant APIs, AI auth sessions, AI audit log
+│   └── admin-service/         # Admin/merchant APIs and AI auth sessions
 ├── ai/
 │   ├── ai-mcp-server/         # Model Context Protocol server with AOP safety pipeline
 │   ├── ai-cli/                # picocli-based CLI for AI agent interactions
@@ -247,7 +247,7 @@ FusionXPay/
 ├── mysql-init/                # Database initialization scripts
 ├── scripts/                   # Deploy, verify, backup, rollback, E2E utilities
 ├── monitoring/                # Prometheus, Grafana, Loki, Promtail configs
-├── docs/                      # Architecture, deployment, and testing docs
+├── docs/                      # Architecture, deployment, platform audit, and testing docs
 └── .github/workflows/         # CI, Docker build, and deployment pipelines
 ```
 
@@ -258,6 +258,7 @@ FusionXPay/
 | Document | Purpose |
 |----------|---------|
 | [Architecture](./docs/design/architecture.md) | System structure and service responsibilities |
+| [Platform Audit Sink](./docs/deployment/platform-audit-sink.md) | Kafka Connect setup for persisting `platform-audit-log` into MySQL |
 | [Process Flow](./docs/design/process-flow.md) | Payment flow diagrams and sequence explanations |
 | [Requirements](./docs/requirements/requirements.md) | Product and API requirements |
 | [Testing Strategy](./docs/testing/testing-strategy.md) | Test layers and coverage approach |

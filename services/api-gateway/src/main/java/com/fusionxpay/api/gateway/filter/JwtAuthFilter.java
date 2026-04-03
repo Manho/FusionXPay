@@ -1,5 +1,7 @@
 package com.fusionxpay.api.gateway.filter;
 
+import com.fusionxpay.api.gateway.audit.GatewayAuditAttributes;
+import com.fusionxpay.common.audit.PlatformAuditHeaders;
 import com.fusionxpay.common.security.JwtClaims;
 import com.fusionxpay.common.security.JwtUtils;
 import lombok.RequiredArgsConstructor;
@@ -53,13 +55,18 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
             return exchange.getResponse().setComplete();
         }
 
+        exchange.getAttributes().put(GatewayAuditAttributes.MERCHANT_ID, claims.merchantId());
+        if (StringUtils.hasText(claims.audience())) {
+            exchange.getAttributes().put(GatewayAuditAttributes.TOKEN_AUDIENCE, claims.audience());
+        }
+
         ServerWebExchange mutatedExchange = exchange.mutate()
                 .request(exchange.getRequest().mutate()
-                        .header("X-Merchant-Id", String.valueOf(claims.merchantId()))
+                        .header(PlatformAuditHeaders.MERCHANT_ID, String.valueOf(claims.merchantId()))
                         .header("X-Merchant-Role", claims.role())
                         .headers(headers -> {
                             if (StringUtils.hasText(claims.audience())) {
-                                headers.add("X-Token-Audience", claims.audience());
+                                headers.add(PlatformAuditHeaders.TOKEN_AUDIENCE, claims.audience());
                             }
                             if (StringUtils.hasText(claims.tokenType())) {
                                 headers.add("X-Token-Type", claims.tokenType());

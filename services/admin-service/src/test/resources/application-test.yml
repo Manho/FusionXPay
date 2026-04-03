@@ -33,10 +33,3 @@ logging:
   level:
     root: WARN
     com.fusionxpay.admin: DEBUG
-
-fusionx:
-  ai:
-    audit:
-      enabled: false
-      consumer:
-        enabled: false

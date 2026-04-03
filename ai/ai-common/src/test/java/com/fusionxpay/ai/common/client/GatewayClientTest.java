@@ -3,6 +3,8 @@ package com.fusionxpay.ai.common.client;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
+import com.fusionxpay.ai.common.audit.AuditRequestMetadata;
+import com.fusionxpay.ai.common.audit.ThreadLocalAuditRequestMetadataProvider;
 import com.fusionxpay.ai.common.dto.auth.GatewayLoginResponse;
 import com.fusionxpay.ai.common.dto.order.OrderPageResult;
 import com.fusionxpay.ai.common.dto.order.OrderSearchRequest;
@@ -35,11 +37,13 @@ class GatewayClientTest {
 
     private WireMockServer wireMockServer;
     private GatewayClient gatewayClient;
+    private ThreadLocalAuditRequestMetadataProvider auditRequestMetadataProvider;
 
     @BeforeEach
     void setUp() {
         wireMockServer = new WireMockServer(WireMockConfiguration.options().dynamicPort());
         wireMockServer.start();
+        auditRequestMetadataProvider = new ThreadLocalAuditRequestMetadataProvider();
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(5_000);
         requestFactory.setReadTimeout(5_000);
@@ -48,7 +52,8 @@ class GatewayClientTest {
                         .baseUrl(wireMockServer.baseUrl())
                         .requestFactory(requestFactory)
                         .build(),
-                new ObjectMapper().findAndRegisterModules()
+                new ObjectMapper().findAndRegisterModules(),
+                auditRequestMetadataProvider
         );
     }
 
@@ -182,5 +187,57 @@ class GatewayClientTest {
         assertThat(response.getTransactionId()).isEqualTo(transactionId);
         assertThat(response.getStatus()).isEqualTo(PaymentStatus.PROCESSING);
         assertThat(response.getRedirectUrl()).isEqualTo("https://checkout.example.com/session/abc");
+    }
+
+    @Test
+    void shouldInjectAuditHeadersWhenMetadataIsPresent() {
+        wireMockServer.stubFor(get(urlEqualTo("/api/v1/admin/auth/me"))
+                .willReturn(aResponse()
+                        .withHeader(HttpHeaders.CONTENT_TYPE, "application/json")
+                        .withBody("""
+                                {
+                                  "id":42,
+                                  "merchantCode":"M-42",
+                                  "merchantName":"Demo Merchant",
+                                  "email":"merchant@example.com",
+                                  "role":"MERCHANT"
+                                }
+                                """)));
+
+        try (var ignored = auditRequestMetadataProvider.withMetadata(AuditRequestMetadata.builder()
+                .source("CLI-Java")
+                .actionName("auth.status")
+                .correlationId("corr-123")
+                .build())) {
+            gatewayClient.getCurrentMerchant("jwt-token");
+        }
+
+        wireMockServer.verify(getRequestedFor(urlEqualTo("/api/v1/admin/auth/me"))
+                .withHeader("X-Audit-Source", equalTo("CLI-Java"))
+                .withHeader("X-Audit-Action", equalTo("auth.status"))
+                .withHeader("X-Audit-Correlation-Id", equalTo("corr-123")));
+    }
+
+    @Test
+    void shouldSkipAuditHeadersWhenMetadataIsAbsent() {
+        wireMockServer.stubFor(get(urlEqualTo("/api/v1/admin/auth/me"))
+                .willReturn(aResponse()
+                        .withHeader(HttpHeaders.CONTENT_TYPE, "application/json")
+                        .withBody("""
+                                {
+                                  "id":42,
+                                  "merchantCode":"M-42",
+                                  "merchantName":"Demo Merchant",
+                                  "email":"merchant@example.com",
+                                  "role":"MERCHANT"
+                                }
+                                """)));
+
+        gatewayClient.getCurrentMerchant("jwt-token");
+
+        wireMockServer.verify(getRequestedFor(urlEqualTo("/api/v1/admin/auth/me"))
+                .withoutHeader("X-Audit-Source")
+                .withoutHeader("X-Audit-Action")
+                .withoutHeader("X-Audit-Correlation-Id"));
     }
 }

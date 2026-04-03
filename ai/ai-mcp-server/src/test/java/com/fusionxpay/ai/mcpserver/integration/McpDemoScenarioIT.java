@@ -2,9 +2,6 @@ package com.fusionxpay.ai.mcpserver.integration;
 
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
-import com.fusionxpay.ai.common.audit.AuditEvent;
-import com.fusionxpay.ai.common.audit.AuditEventPublisher;
-import com.fusionxpay.ai.common.audit.AuditStatus;
 import com.fusionxpay.ai.common.dto.confirmation.ConfirmationResponse;
 import com.fusionxpay.ai.common.dto.confirmation.ConfirmationStatus;
 import com.fusionxpay.ai.common.dto.order.OrderPageResult;
@@ -22,25 +19,19 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Import;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpHeaders;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
 import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
+import static com.github.tomakehurst.wiremock.client.WireMock.matching;
 import static com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
@@ -49,9 +40,8 @@ import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(
-        classes = {AiMcpServerApplication.class, McpDemoScenarioIT.TestAuditConfiguration.class},
+        classes = AiMcpServerApplication.class,
         properties = {
-                "fusionx.ai.audit.enabled=false",
                 "fusionx.ai.mcp.auth.email=merchant@example.com",
                 "fusionx.ai.mcp.auth.password=Secret123!",
                 "fusionx.ai.mcp.safety.max-input-length=4000",
@@ -67,9 +57,6 @@ class McpDemoScenarioIT {
 
     @Autowired
     private FusionXMcpTools tools;
-
-    @Autowired
-    private CapturingAuditEventPublisher auditEventPublisher;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -95,9 +82,8 @@ class McpDemoScenarioIT {
     }
 
     @Test
-    @DisplayName("Should execute the full MCP demo scenario and emit audit events")
+    @DisplayName("Should execute the full MCP demo scenario and propagate MCP audit headers")
     void shouldExecuteFullDemoScenario() {
-        auditEventPublisher.clear();
         stubLogin();
         stubOrderSearch();
         stubPaymentSearch();
@@ -149,53 +135,39 @@ class McpDemoScenarioIT {
         assertThat(refundResult.getTransactionId()).isEqualTo(refundTransactionId.toString());
         assertThat(refundResult.getStatus()).isEqualTo("SUCCEEDED");
 
-        List<String> actionNames = auditEventPublisher.snapshot().stream()
-                .map(AuditEvent::getActionName)
-                .toList();
-        assertThat(actionNames).containsExactly(
-                "search_orders",
-                "get_order",
-                "search_payments",
-                "initiate_payment",
-                "confirm_action",
-                "refund_payment",
-                "confirm_action"
-        );
-        assertThat(auditEventPublisher.snapshot().stream().map(AuditEvent::getStatus))
-                .containsExactly(
-                        AuditStatus.SUCCESS,
-                        AuditStatus.SUCCESS,
-                        AuditStatus.SUCCESS,
-                        AuditStatus.CONFIRMATION_REQUIRED,
-                        AuditStatus.SUCCESS,
-                        AuditStatus.CONFIRMATION_REQUIRED,
-                        AuditStatus.SUCCESS
-                );
-        assertThat(auditEventPublisher.snapshot())
-                .allSatisfy(event -> {
-                    assertThat(event.getMerchantId()).isEqualTo(MERCHANT_ID);
-                    assertThat(event.getCorrelationId()).isNotBlank();
-                    assertThat(event.getDurationMs()).isGreaterThanOrEqualTo(0L);
-                });
-
         WIRE_MOCK.verify(postRequestedFor(urlEqualTo("/api/v1/admin/auth/login"))
                 .withRequestBody(matchingJsonPath("$.email", equalTo("merchant@example.com"))));
         WIRE_MOCK.verify(getRequestedFor(urlPathEqualTo("/api/v1/orders"))
                 .withHeader(HttpHeaders.AUTHORIZATION, equalTo("Bearer " + JWT_TOKEN))
-                .withHeader("X-Merchant-Id", equalTo(String.valueOf(MERCHANT_ID))));
+                .withHeader("X-Merchant-Id", equalTo(String.valueOf(MERCHANT_ID)))
+                .withHeader("X-Audit-Source", equalTo("MCP-Java"))
+                .withHeader("X-Audit-Action", equalTo("search_orders"))
+                .withHeader("X-Audit-Correlation-Id", matching(".+")));
         WIRE_MOCK.verify(getRequestedFor(urlEqualTo("/api/v1/orders/id/" + orderId))
                 .withHeader(HttpHeaders.AUTHORIZATION, equalTo("Bearer " + JWT_TOKEN))
-                .withHeader("X-Merchant-Id", equalTo(String.valueOf(MERCHANT_ID))));
+                .withHeader("X-Merchant-Id", equalTo(String.valueOf(MERCHANT_ID)))
+                .withHeader("X-Audit-Source", equalTo("MCP-Java"))
+                .withHeader("X-Audit-Action", equalTo("get_order"))
+                .withHeader("X-Audit-Correlation-Id", matching(".+")));
         WIRE_MOCK.verify(getRequestedFor(urlPathEqualTo("/api/v1/payment/search"))
                 .withHeader(HttpHeaders.AUTHORIZATION, equalTo("Bearer " + JWT_TOKEN))
-                .withHeader("X-Merchant-Id", equalTo(String.valueOf(MERCHANT_ID))));
+                .withHeader("X-Merchant-Id", equalTo(String.valueOf(MERCHANT_ID)))
+                .withHeader("X-Audit-Source", equalTo("MCP-Java"))
+                .withHeader("X-Audit-Action", equalTo("search_payments"))
+                .withHeader("X-Audit-Correlation-Id", matching(".+")));
         WIRE_MOCK.verify(postRequestedFor(urlEqualTo("/api/v1/payment/request"))
                 .withHeader(HttpHeaders.AUTHORIZATION, equalTo("Bearer " + JWT_TOKEN))
                 .withHeader("X-Merchant-Id", equalTo(String.valueOf(MERCHANT_ID)))
+                .withHeader("X-Audit-Source", equalTo("MCP-Java"))
+                .withHeader("X-Audit-Action", equalTo("confirm_action"))
+                .withHeader("X-Audit-Correlation-Id", matching(".+"))
                 .withRequestBody(matchingJsonPath("$.successUrl", equalTo("https://fusionx.fun/payment/success"))));
         WIRE_MOCK.verify(postRequestedFor(urlEqualTo("/api/v1/payment/refund"))
                 .withHeader(HttpHeaders.AUTHORIZATION, equalTo("Bearer " + JWT_TOKEN))
                 .withHeader("X-Merchant-Id", equalTo(String.valueOf(MERCHANT_ID)))
+                .withHeader("X-Audit-Source", equalTo("MCP-Java"))
+                .withHeader("X-Audit-Action", equalTo("confirm_action"))
+                .withHeader("X-Audit-Correlation-Id", matching(".+"))
                 .withRequestBody(matchingJsonPath("$.transactionId", equalTo(initialTransactionId.toString()))));
     }
 
@@ -320,32 +292,5 @@ class McpDemoScenarioIT {
                                   "message":"Refund accepted"
                                 }
                                 """.formatted(refundTransactionId, originalTransactionId))));
-    }
-
-    @TestConfiguration
-    static class TestAuditConfiguration {
-
-        @Bean
-        @Primary
-        CapturingAuditEventPublisher auditEventPublisher() {
-            return new CapturingAuditEventPublisher();
-        }
-    }
-
-    static class CapturingAuditEventPublisher implements AuditEventPublisher {
-        private final CopyOnWriteArrayList<AuditEvent> events = new CopyOnWriteArrayList<>();
-
-        @Override
-        public void publish(AuditEvent event) {
-            events.add(event);
-        }
-
-        List<AuditEvent> snapshot() {
-            return new ArrayList<>(events);
-        }
-
-        void clear() {
-            events.clear();
-        }
     }
 }

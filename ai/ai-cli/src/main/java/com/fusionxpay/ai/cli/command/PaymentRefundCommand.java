@@ -3,9 +3,7 @@ package com.fusionxpay.ai.cli.command;
 import com.fusionxpay.ai.cli.command.support.AbstractCliLeafCommand;
 import com.fusionxpay.ai.cli.command.support.CliRenderSupport;
 import com.fusionxpay.ai.cli.service.CliCommandService;
-import com.fusionxpay.ai.common.audit.AuditStatus;
 import com.fusionxpay.ai.common.dto.confirmation.ConfirmationResponse;
-import com.fusionxpay.ai.common.dto.confirmation.ConfirmationStatus;
 import com.fusionxpay.ai.common.dto.payment.RefundPaymentRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -47,9 +45,6 @@ public class PaymentRefundCommand extends AbstractCliLeafCommand implements Call
                 .captureId(captureId)
                 .build());
         setAuditOutputSummary(CliRenderSupport.renderConfirmation(out(), response));
-        if (response.getStatus() == ConfirmationStatus.CONFIRMATION_REQUIRED) {
-            setAuditStatus(AuditStatus.CONFIRMATION_REQUIRED);
-        }
         return 0;
     }
 

@@ -1,7 +1,6 @@
 package com.fusionxpay.ai.mcpserver;
 
 import com.fusionxpay.ai.common.client.GatewayClient;
-import com.fusionxpay.ai.common.audit.AuditEventPublisher;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.ToolCallbackProvider;
@@ -18,16 +17,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(properties = {
         "spring.ai.mcp.server.enabled=false",
-        "fusionx.ai.audit.enabled=false",
         "fusionx.ai.mcp.auth.jwt-token=test-token"
 })
 class McpToolRegistrationTest {
 
     @MockBean
     private GatewayClient gatewayClient;
-
-    @MockBean
-    private AuditEventPublisher auditEventPublisher;
 
     @Autowired
     private ToolCallbackProvider toolCallbackProvider;

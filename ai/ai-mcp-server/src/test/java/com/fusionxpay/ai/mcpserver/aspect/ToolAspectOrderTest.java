@@ -1,12 +1,9 @@
 package com.fusionxpay.ai.mcpserver.aspect;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fusionxpay.ai.common.audit.AuditEvent;
-import com.fusionxpay.ai.common.audit.AuditEventPublisher;
-import com.fusionxpay.ai.common.dto.auth.GatewayMerchantInfo;
-import com.fusionxpay.ai.common.dto.auth.MerchantSession;
+import com.fusionxpay.ai.common.audit.AuditRequestMetadata;
+import com.fusionxpay.ai.common.audit.AuditRequestMetadataProvider;
 import com.fusionxpay.ai.mcpserver.config.McpSafetyProperties;
-import com.fusionxpay.ai.mcpserver.tool.McpAuthenticationService;
 import com.fusionxpay.ai.mcpserver.tool.McpToolOperation;
 import org.junit.jupiter.api.Test;
 import org.springframework.aop.aspectj.annotation.AspectJProxyFactory;
@@ -18,8 +15,6 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 class ToolAspectOrderTest {
 
@@ -27,19 +22,7 @@ class ToolAspectOrderTest {
             .withBean(ObjectMapper.class, () -> new ObjectMapper().findAndRegisterModules())
             .withBean(McpSafetyProperties.class)
             .withBean(ToolAspectObserver.class, () -> new RecordingObserver())
-            .withBean(McpAuthenticationService.class, () -> {
-                McpAuthenticationService authenticationService = mock(McpAuthenticationService.class);
-                when(authenticationService.getCurrentMerchantIdOrNull()).thenReturn(42L);
-                when(authenticationService.getCurrentSession()).thenReturn(MerchantSession.builder()
-                        .token("jwt-token")
-                        .merchant(GatewayMerchantInfo.builder().id(42L).role("MERCHANT").build())
-                        .build());
-                return authenticationService;
-            })
-            .withBean(AuditEventPublisher.class, () -> {
-                AtomicReference<AuditEvent> holder = new AtomicReference<>();
-                return holder::set;
-            })
+            .withBean(AuditRequestMetadataProvider.class, com.fusionxpay.ai.common.audit.ThreadLocalAuditRequestMetadataProvider::new)
             .withBean(InputSafetyAspect.class)
             .withBean(ToolAuditAspect.class)
             .withBean(OutputSafetyAspect.class);
@@ -48,7 +31,9 @@ class ToolAspectOrderTest {
     void shouldApplyAspectsInConfiguredOrderAndRedactOutput() {
         contextRunner.run(context -> {
             RecordingObserver observer = context.getBean(RecordingObserver.class);
-            SampleToolTarget target = new SampleToolTarget();
+            AuditRequestMetadataProvider metadataProvider = context.getBean(AuditRequestMetadataProvider.class);
+            AtomicReference<AuditRequestMetadata> capturedMetadata = new AtomicReference<>();
+            SampleToolTarget target = new SampleToolTarget(metadataProvider, capturedMetadata);
 
             AspectJProxyFactory proxyFactory = new AspectJProxyFactory(target);
             proxyFactory.addAspect(context.getBean(InputSafetyAspect.class));
@@ -61,13 +46,21 @@ class ToolAspectOrderTest {
 
             assertThat(observer.stages).containsExactly("input:sample_tool", "audit:sample_tool", "output:sample_tool");
             assertThat(payload.secret()).isEqualTo("[REDACTED]");
+            assertThat(capturedMetadata.get()).isNotNull();
+            assertThat(capturedMetadata.get().source()).isEqualTo("MCP-Java");
+            assertThat(capturedMetadata.get().actionName()).isEqualTo("sample_tool");
+            assertThat(capturedMetadata.get().correlationId()).isNotBlank();
+            assertThat(metadataProvider.currentMetadata()).isNull();
         });
     }
 
     @Test
     void shouldAllowJsonLikeQuotedInputWithinThreshold() {
         contextRunner.run(context -> {
-            SampleToolTarget target = new SampleToolTarget();
+            SampleToolTarget target = new SampleToolTarget(
+                    context.getBean(AuditRequestMetadataProvider.class),
+                    new AtomicReference<>()
+            );
 
             AspectJProxyFactory proxyFactory = new AspectJProxyFactory(target);
             proxyFactory.addAspect(context.getBean(InputSafetyAspect.class));
@@ -89,9 +82,18 @@ class ToolAspectOrderTest {
     }
 
     static class SampleToolTarget {
+        private final AuditRequestMetadataProvider metadataProvider;
+        private final AtomicReference<AuditRequestMetadata> capturedMetadata;
+
+        SampleToolTarget(AuditRequestMetadataProvider metadataProvider,
+                         AtomicReference<AuditRequestMetadata> capturedMetadata) {
+            this.metadataProvider = metadataProvider;
+            this.capturedMetadata = capturedMetadata;
+        }
 
         @McpToolOperation("sample_tool")
         public SanitizedPayload sampleTool(String input) {
+            capturedMetadata.set(metadataProvider.currentMetadata());
             return new SanitizedPayload("Bearer secret-token");
         }
     }

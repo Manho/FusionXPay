@@ -2,6 +2,8 @@ package com.fusionxpay.ai.common.client;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fusionxpay.ai.common.audit.AuditRequestMetadata;
+import com.fusionxpay.ai.common.audit.AuditRequestMetadataProvider;
 import com.fusionxpay.ai.common.dto.auth.GatewayLoginRequest;
 import com.fusionxpay.ai.common.dto.auth.GatewayLoginResponse;
 import com.fusionxpay.ai.common.dto.auth.GatewayMerchantInfo;
@@ -28,7 +30,7 @@ import com.fusionxpay.ai.common.dto.payment.RefundResult;
 import com.fusionxpay.ai.common.exception.AiAuthenticationException;
 import com.fusionxpay.ai.common.exception.AiGatewayException;
 import com.fusionxpay.ai.common.exception.AiTransportException;
-import lombok.RequiredArgsConstructor;
+import com.fusionxpay.common.audit.PlatformAuditHeaders;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.lang.Nullable;
@@ -39,13 +41,24 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import java.util.UUID;
 
-@RequiredArgsConstructor
 public class GatewayClient {
-
-    private static final String HEADER_MERCHANT_ID = "X-Merchant-Id";
 
     private final RestClient restClient;
     private final ObjectMapper objectMapper;
+    @Nullable
+    private final AuditRequestMetadataProvider auditRequestMetadataProvider;
+
+    public GatewayClient(RestClient restClient, ObjectMapper objectMapper) {
+        this(restClient, objectMapper, null);
+    }
+
+    public GatewayClient(RestClient restClient,
+                         ObjectMapper objectMapper,
+                         @Nullable AuditRequestMetadataProvider auditRequestMetadataProvider) {
+        this.restClient = restClient;
+        this.objectMapper = objectMapper;
+        this.auditRequestMetadataProvider = auditRequestMetadataProvider;
+    }
 
     public GatewayLoginResponse login(String email, String password) {
         return execute(restClient.post()
@@ -172,18 +185,38 @@ public class GatewayClient {
         return spec.headers(headers -> {
             headers.setBearerAuth(token);
             if (merchantId != null) {
-                headers.add(HEADER_MERCHANT_ID, String.valueOf(merchantId));
+                headers.add(PlatformAuditHeaders.MERCHANT_ID, String.valueOf(merchantId));
             }
         });
     }
 
     private <T> T execute(RestClient.RequestHeadersSpec<?> spec, Class<T> responseType) {
         try {
-            return spec.retrieve().body(responseType);
+            return withAuditHeaders(spec).retrieve().body(responseType);
         } catch (RestClientResponseException ex) {
             throw mapGatewayException(ex);
         } catch (ResourceAccessException ex) {
             throw new AiTransportException("Gateway request failed", ex);
+        }
+    }
+
+    private RestClient.RequestHeadersSpec<?> withAuditHeaders(RestClient.RequestHeadersSpec<?> spec) {
+        AuditRequestMetadata metadata = auditRequestMetadataProvider == null ? null : auditRequestMetadataProvider.currentMetadata();
+        if (metadata == null) {
+            return spec;
+        }
+        return spec.headers(headers -> applyAuditHeaders(headers, metadata));
+    }
+
+    private void applyAuditHeaders(HttpHeaders headers, AuditRequestMetadata metadata) {
+        addIfPresent(headers, PlatformAuditHeaders.AUDIT_SOURCE, metadata.source());
+        addIfPresent(headers, PlatformAuditHeaders.AUDIT_ACTION, metadata.actionName());
+        addIfPresent(headers, PlatformAuditHeaders.AUDIT_CORRELATION_ID, metadata.correlationId());
+    }
+
+    private void addIfPresent(HttpHeaders headers, String name, @Nullable String value) {
+        if (value != null && !value.isBlank()) {
+            headers.set(name, value);
         }
     }
 

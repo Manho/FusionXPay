@@ -13,6 +13,8 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
   cloud:
     gateway:
       server:
@@ -172,6 +174,14 @@ management:
 
 jwt:
   secret: ${JWT_SECRET:fusionxpay-admin-jwt-secret-key-must-be-at-least-256-bits-long}
+
+fusionx:
+  platform:
+    audit:
+      enabled: ${FUSIONX_PLATFORM_AUDIT_ENABLED:true}
+      topic: ${FUSIONX_PLATFORM_AUDIT_TOPIC:platform-audit-log}
+      reliable: ${FUSIONX_PLATFORM_AUDIT_RELIABLE:false}
+      send-timeout: ${FUSIONX_PLATFORM_AUDIT_SEND_TIMEOUT:1500ms}
 
 app:
   rate-limit:

@@ -10,8 +10,7 @@ import picocli.CommandLine;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(properties = {
-        "fusionx.ai.cli.runner-enabled=false",
-        "fusionx.ai.audit.enabled=false"
+        "fusionx.ai.cli.runner-enabled=false"
 })
 class CliCommandLineFactoryTest {
 

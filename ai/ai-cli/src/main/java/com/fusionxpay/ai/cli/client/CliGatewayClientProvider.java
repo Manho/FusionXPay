@@ -3,6 +3,7 @@ package com.fusionxpay.ai.cli.client;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fusionxpay.ai.cli.config.CliConfigStore;
 import com.fusionxpay.ai.cli.config.CliStoredConfig;
+import com.fusionxpay.ai.common.audit.AuditRequestMetadataProvider;
 import com.fusionxpay.ai.common.client.GatewayClient;
 import com.fusionxpay.ai.common.config.FusionXGatewayProperties;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +20,7 @@ public class CliGatewayClientProvider {
     private final CliConfigStore configStore;
     private final FusionXGatewayProperties gatewayProperties;
     private final ObjectMapper objectMapper;
+    private final AuditRequestMetadataProvider auditRequestMetadataProvider;
 
     public GatewayClient currentClient() {
         return clientFor(resolveBaseUrl());
@@ -33,7 +35,7 @@ public class CliGatewayClientProvider {
                 .baseUrl(baseUrl.toString())
                 .requestFactory(requestFactory)
                 .build();
-        return new GatewayClient(restClient, objectMapper);
+        return new GatewayClient(restClient, objectMapper, auditRequestMetadataProvider);
     }
 
     public URI resolveBaseUrl() {
