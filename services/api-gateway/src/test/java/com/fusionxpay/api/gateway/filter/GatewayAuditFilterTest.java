@@ -31,6 +31,7 @@ class GatewayAuditFilterTest {
         filter.filter(exchange, okChain(HttpStatus.OK)).block();
 
         assertThat(captured.get()).isNotNull();
+        assertThat(exchange.getResponse().getHeaders().getFirst("X-Audit-Correlation-Id")).isEqualTo("corr-123");
         assertThat(captured.get().getSource()).isEqualTo("CLI-Java");
         assertThat(captured.get().getActionName()).isEqualTo("order.search");
         assertThat(captured.get().getCorrelationId()).isEqualTo("corr-123");
@@ -51,6 +52,7 @@ class GatewayAuditFilterTest {
         filter.filter(exchange, okChain(HttpStatus.ACCEPTED)).block();
 
         assertThat(captured.get()).isNotNull();
+        assertThat(exchange.getResponse().getHeaders().getFirst("X-Audit-Correlation-Id")).isEqualTo(captured.get().getCorrelationId());
         assertThat(captured.get().getSource()).isEqualTo("UNKNOWN");
         assertThat(captured.get().getActionName()).isEqualTo("POST /api/v1/payment/request");
         assertThat(captured.get().getCorrelationId()).isNotBlank();

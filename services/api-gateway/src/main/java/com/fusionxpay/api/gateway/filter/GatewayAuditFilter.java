@@ -32,8 +32,17 @@ public class GatewayAuditFilter implements GlobalFilter, Ordered {
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         long startedAt = System.currentTimeMillis();
-        return chain.filter(exchange)
-                .doFinally(signalType -> publishEvent(exchange, startedAt));
+        String correlationId = headerOrDefault(exchange, PlatformAuditHeaders.AUDIT_CORRELATION_ID, UUID.randomUUID().toString());
+        exchange.getResponse().getHeaders().set(PlatformAuditHeaders.AUDIT_CORRELATION_ID, correlationId);
+
+        ServerWebExchange auditedExchange = exchange.mutate()
+                .request(exchange.getRequest().mutate()
+                        .headers(headers -> headers.set(PlatformAuditHeaders.AUDIT_CORRELATION_ID, correlationId))
+                        .build())
+                .build();
+
+        return chain.filter(auditedExchange)
+                .doFinally(signalType -> publishEvent(auditedExchange, startedAt));
     }
 
     private void publishEvent(ServerWebExchange exchange, long startedAt) {
