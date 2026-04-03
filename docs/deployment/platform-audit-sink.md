@@ -35,6 +35,15 @@ The deployment host must expose a working `.env.always-on` with:
 - `KAFKA_CONNECT_URL` or `KAFKA_CONNECT_PORT`
 - `FUSIONX_PLATFORM_AUDIT_TOPIC`
 
+Cold starts for `cp-kafka-connect` can take a few minutes because the JDBC plugin is installed at container startup.
+If your host or network is slower, tune these optional env vars in `.env.always-on`:
+
+- `PLATFORM_AUDIT_CONNECT_MAX_RETRIES`
+- `PLATFORM_AUDIT_CONNECT_RETRY_SECONDS`
+- `PLATFORM_AUDIT_CONNECTOR_MAX_RETRIES`
+- `PLATFORM_AUDIT_CONNECTOR_RETRY_SECONDS`
+- `KAFKA_CONNECT_HEALTH_MAX_RETRIES`
+
 ## Manual Registration Example
 
 ```bash
