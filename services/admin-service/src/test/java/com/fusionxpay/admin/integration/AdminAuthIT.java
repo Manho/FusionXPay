@@ -8,7 +8,7 @@ import com.fusionxpay.admin.model.MerchantRole;
 import com.fusionxpay.admin.model.MerchantStatus;
 import com.fusionxpay.admin.repository.MerchantRepository;
 import com.fusionxpay.admin.security.JwtTokenProvider;
-import com.fusionxpay.common.test.AbstractIntegrationTest;
+import com.fusionxpay.common.test.AbstractDbRedisIntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -24,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Integration tests for JWT authentication in admin-service
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-public class AdminAuthIT extends AbstractIntegrationTest {
+public class AdminAuthIT extends AbstractDbRedisIntegrationTest {
 
     @Autowired
     private TestRestTemplate restTemplate;
