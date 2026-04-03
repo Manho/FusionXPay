@@ -20,7 +20,22 @@ Adjust the following fields for your environment before registering the connecto
 - `topics`
 - `table.name.format`
 
-## Registration Example
+## Auto Deployment
+
+The always-on deployment now provisions this infrastructure automatically:
+
+- `scripts/deploy-always-on.sh` applies [07-platform-audit-log.sql](/Users/manho/src/FusionXPay/mysql-init/07-platform-audit-log.sql)
+- `docker-compose.always-on.yml` starts a `kafka-connect` worker
+- `scripts/ensure-platform-audit-infra.sh` registers or updates `platform-audit-log-mysql-sink`
+
+The deployment host must expose a working `.env.always-on` with:
+
+- `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, `DB_PASSWORD`
+- `KAFKA_BOOTSTRAP_SERVERS`
+- `KAFKA_CONNECT_URL` or `KAFKA_CONNECT_PORT`
+- `FUSIONX_PLATFORM_AUDIT_TOPIC`
+
+## Manual Registration Example
 
 ```bash
 curl -X POST http://<connect-host>:8083/connectors \

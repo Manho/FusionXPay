@@ -15,6 +15,11 @@ if grep -q '^API_GATEWAY_PORT=' "${ENV_FILE}"; then
   API_PORT="$(grep '^API_GATEWAY_PORT=' "${ENV_FILE}" | cut -d'=' -f2)"
 fi
 
+PLATFORM_AUDIT_SINK_ENABLED="${PLATFORM_AUDIT_SINK_ENABLED:-true}"
+if grep -q '^PLATFORM_AUDIT_SINK_ENABLED=' "${ENV_FILE}"; then
+  PLATFORM_AUDIT_SINK_ENABLED="$(grep '^PLATFORM_AUDIT_SINK_ENABLED=' "${ENV_FILE}" | cut -d'=' -f2)"
+fi
+
 HEALTH_URL="http://localhost:${API_PORT}/actuator/health"
 GATEWAY_BASE_URL="http://localhost:${API_PORT}"
 MAX_RETRIES=30
@@ -26,6 +31,9 @@ CORE_CONTAINERS=(
   fusionxpay-payment-service
   fusionxpay-notification-service
 )
+if [[ "${PLATFORM_AUDIT_SINK_ENABLED:-true}" == "true" ]]; then
+  CORE_CONTAINERS+=(fusionxpay-kafka-connect)
+fi
 
 wait_for_container_health() {
   local container="$1"
@@ -165,9 +173,17 @@ fi
 rm -f /tmp/fusionxpay-alwayson-login-smoke.out /tmp/fusionxpay-alwayson-register-smoke.out /tmp/fusionxpay-alwayson-orders-smoke.out /tmp/fusionxpay-alwayson-providers-smoke.out
 
 echo "[INFO] One-shot memory usage snapshot"
-docker stats --no-stream \
-  fusionxpay-api-gateway \
-  fusionxpay-payment-service \
-  fusionxpay-order-service \
-  fusionxpay-notification-service \
+STATS_CONTAINERS=(
+  fusionxpay-api-gateway
+  fusionxpay-payment-service
+  fusionxpay-order-service
+  fusionxpay-notification-service
   fusionxpay-admin-service
+)
+if [[ "${PLATFORM_AUDIT_SINK_ENABLED:-true}" == "true" ]]; then
+  STATS_CONTAINERS+=(fusionxpay-kafka-connect)
+fi
+docker stats --no-stream "${STATS_CONTAINERS[@]}"
+
+echo "[INFO] Verifying platform audit infrastructure"
+"${ROOT_DIR}/scripts/ensure-platform-audit-infra.sh" --verify-only "${ENV_FILE}"

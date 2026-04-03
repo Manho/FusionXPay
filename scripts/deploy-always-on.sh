@@ -188,5 +188,8 @@ if (( up_attempt > up_max_attempts )); then
   exit 1
 fi
 
+echo "[INFO] Ensuring platform audit infrastructure..."
+"${ROOT_DIR}/scripts/ensure-platform-audit-infra.sh" "${ENV_FILE}"
+
 echo "[INFO] Deployment finished. Current status:"
 compose ps

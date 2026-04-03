@@ -129,6 +129,54 @@ services:
       FUSIONX_AI_FRONTEND_BASE_URL: ${FUSIONX_AI_FRONTEND_BASE_URL:?FUSIONX_AI_FRONTEND_BASE_URL is required}
       ORDER_SERVICE_URL: ${ORDER_SERVICE_URL:-http://order-service:8082}
 
+  kafka-connect:
+    <<: *common-service
+    image: confluentinc/cp-kafka-connect:7.6.1
+    container_name: fusionxpay-kafka-connect
+    hostname: kafka-connect
+    ports:
+      - "${KAFKA_CONNECT_PORT:-8083}:8083"
+    mem_limit: 768m
+    cpus: 0.60
+    stop_grace_period: 20s
+    environment:
+      CONNECT_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:?KAFKA_BOOTSTRAP_SERVERS is required}
+      CONNECT_REST_PORT: 8083
+      CONNECT_REST_ADVERTISED_HOST_NAME: kafka-connect
+      CONNECT_GROUP_ID: fusionxpay-platform-audit-connect
+      CONNECT_CONFIG_STORAGE_TOPIC: fusionxpay-connect-configs
+      CONNECT_OFFSET_STORAGE_TOPIC: fusionxpay-connect-offsets
+      CONNECT_STATUS_STORAGE_TOPIC: fusionxpay-connect-status
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
+      CONNECT_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+      CONNECT_INTERNAL_KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_INTERNAL_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_PLUGIN_PATH: /usr/share/java,/usr/share/confluent-hub-components
+      CONNECT_LOG4J_ROOT_LOGLEVEL: INFO
+      KAFKA_CONNECT_JDBC_CONNECTOR_VERSION: ${KAFKA_CONNECT_JDBC_CONNECTOR_VERSION:-10.7.6}
+    command:
+      - bash
+      - -lc
+      - |
+        set -euo pipefail
+        plugin_dir="/usr/share/confluent-hub-components/confluentinc-kafka-connect-jdbc"
+        if [[ ! -d "$${plugin_dir}" ]]; then
+          confluent-hub install --no-prompt "confluentinc/kafka-connect-jdbc:${KAFKA_CONNECT_JDBC_CONNECTOR_VERSION}"
+        fi
+        /etc/confluent/docker/run
+    volumes:
+      - fusionxpay-kafka-connect-plugins:/usr/share/confluent-hub-components
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/8083'"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 45s
+
   # --- Observability Stack ---
 
   prometheus:
@@ -211,3 +259,4 @@ volumes:
   fusionxpay-grafana-data:
   fusionxpay-loki-data:
   fusionxpay-promtail-data:
+  fusionxpay-kafka-connect-plugins:
