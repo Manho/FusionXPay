@@ -1,0 +1,156 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1100" viewBox="0 0 1600 1100">
+  <defs>
+    <style>
+      .title { font: 700 40px 'Segoe UI', Arial, sans-serif; fill: #0f172a; }
+      .box-title { font: 700 20px 'Segoe UI', Arial, sans-serif; fill: #1e293b; }
+      .box-tiny { font: 600 15px 'Segoe UI', Arial, sans-serif; fill: #475569; }
+      .path-label { font: 600 15px 'Segoe UI', Arial, sans-serif; fill: #0f172a; }
+      
+      .box-external { fill: #f8fafc; stroke: #94a3b8; stroke-width: 2.5px; }
+      .box-ai { fill: #eff6ff; stroke: #3b82f6; stroke-width: 2.5px; }
+      .box-gateway { fill: #f0fdf4; stroke: #22c55e; stroke-width: 2.5px; }
+      .box-service { fill: #fff7ed; stroke: #f97316; stroke-width: 2.5px; }
+      .badge { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.5px; }
+    </style>
+    <marker id="arrow-solid" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,1 L8,5 L0,9 z" fill="#334155" />
+    </marker>
+    <marker id="arrow-blue" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,1 L8,5 L0,9 z" fill="#2563eb" />
+    </marker>
+    <marker id="arrow-green" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,1 L8,5 L0,9 z" fill="#16a34a" />
+    </marker>
+    <marker id="arrow-purple" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,1 L8,5 L0,9 z" fill="#8b5cf6" />
+    </marker>
+    <marker id="arrow-sky" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,1 L8,5 L0,9 z" fill="#0ea5e9" />
+    </marker>
+    <marker id="arrow-yellow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,1 L8,5 L0,9 z" fill="#ca8a04" />
+    </marker>
+    <marker id="arrow-teal" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,1 L8,5 L0,9 z" fill="#14b8a6" />
+    </marker>
+    <marker id="arrow-emerald" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,1 L8,5 L0,9 z" fill="#10b981" />
+    </marker>
+  </defs>
+
+  <rect width="1600" height="1100" fill="#ffffff" />
+  <text x="800" y="50" text-anchor="middle" class="title">AI Agent Authorization Flow</text>
+
+  <!-- ==================== BACKGROUND GROUP FRAMES ==================== -->
+  <rect x="50" y="520" width="1500" height="150" fill="#f8fafc" stroke="#3b82f6" stroke-dasharray="10 6" stroke-width="2" rx="12" />
+  <rect x="50" y="700" width="1500" height="150" fill="#fefce8" stroke="#eab308" stroke-dasharray="10 6" stroke-width="2" rx="12" />
+
+  <!-- ==================== LIFELINES ==================== -->
+  <path d="M200 180 L200 1080" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 6" fill="none" />
+  <path d="M600 180 L600 1080" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 6" fill="none" />
+  <path d="M1000 180 L1000 1080" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 6" fill="none" />
+  <path d="M1400 180 L1400 1080" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 6" fill="none" />
+
+  <!-- ==================== ENTITY BOXES ==================== -->
+  <rect x="100" y="90" width="200" height="90" rx="12" class="box-external" />
+  <text x="200" y="135" text-anchor="middle" class="box-title">User Browser</text>
+  <text x="200" y="158" text-anchor="middle" class="box-tiny">Human Operator</text>
+
+  <rect x="500" y="90" width="200" height="90" rx="12" class="box-ai" />
+  <text x="600" y="135" text-anchor="middle" class="box-title">AI Tool / Agent</text>
+  <text x="600" y="158" text-anchor="middle" class="box-tiny">CLI (Primary) / MCP Clients</text>
+
+  <rect x="900" y="90" width="200" height="90" rx="12" class="box-gateway" />
+  <text x="1000" y="135" text-anchor="middle" class="box-title">API Gateway</text>
+  <text x="1000" y="158" text-anchor="middle" class="box-tiny">Ingress Routing</text>
+
+  <rect x="1300" y="90" width="200" height="90" rx="12" class="box-service" />
+  <text x="1400" y="135" text-anchor="middle" class="box-title">Admin Service</text>
+  <text x="1400" y="158" text-anchor="middle" class="box-tiny">Auth Provider API</text>
+
+  <!-- ==================== SEQUENCE PATHS & BADGES ==================== -->
+
+  <!-- STEP 1 -> Y=240 -->
+  <path d="M600 240 L1000 240" stroke="#2563eb" stroke-width="2.5" fill="none" marker-end="url(#arrow-blue)" />
+  <path d="M1000 240 L1400 240" stroke="#2563eb" stroke-width="2.5" fill="none" marker-end="url(#arrow-blue)" />
+  <rect x="655" y="227" width="290" height="26" class="badge" rx="6" />
+  <text x="800" y="245" text-anchor="middle" class="path-label">POST /api/v1/admin/auth/ai/authorize</text>
+  <rect x="1020" y="227" width="360" height="26" class="badge" rx="6" />
+  <text x="1200" y="245" text-anchor="middle" class="path-label">Forwards with PKCE challenge / Device details</text>
+  
+  <!-- Y=310 -->
+  <path d="M1400 310 L1000 310" stroke="#16a34a" stroke-width="2.5" stroke-dasharray="6 4" fill="none" marker-end="url(#arrow-green)" />
+  <path d="M1000 310 L600 310" stroke="#16a34a" stroke-width="2.5" stroke-dasharray="6 4" fill="none" marker-end="url(#arrow-green)" />
+  <rect x="1070" y="297" width="260" height="26" class="badge" rx="6" />
+  <text x="1200" y="315" text-anchor="middle" class="path-label" fill="#15803d">Issues URL, Auth Payload &amp; Codes</text>
+  <rect x="690" y="297" width="220" height="26" class="badge" rx="6" />
+  <text x="800" y="315" text-anchor="middle" class="path-label" fill="#15803d">200 OK + authorization_url</text>
+
+  <!-- STEP 2 -> Y=380 -->
+  <path d="M600 380 L200 380" stroke="#475569" stroke-width="2.5" stroke-dasharray="6 4" fill="none" marker-end="url(#arrow-solid)" />
+  <rect x="270" y="367" width="260" height="26" class="badge" rx="6" />
+  <text x="400" y="385" text-anchor="middle" class="path-label">CLI Automatically Opens Browser</text>
+
+  <!-- Y=450 (Browser to Gateway to Admin) -->
+  <path d="M200 450 L1000 450" stroke="#8b5cf6" stroke-width="2.5" fill="none" marker-end="url(#arrow-purple)" />
+  <rect x="410" y="437" width="180" height="26" class="badge" rx="6" />
+  <text x="500" y="455" text-anchor="middle" class="path-label" fill="#6d28d9">User views Consent UI</text>
+  <path d="M1000 450 L1400 450" stroke="#8b5cf6" stroke-width="2.5" fill="none" marker-end="url(#arrow-purple)" />
+  <rect x="1015" y="437" width="370" height="26" class="badge" rx="6" />
+  <text x="1200" y="455" text-anchor="middle" class="path-label" fill="#6d28d9">POST /consent/approve (User Authorizes Web UI)</text>
+
+  <!-- ==================== SPLIT A: PKCE CALLBACK (PRIMARY) ==================== -->
+  <text x="70" y="550" class="box-title" fill="#1e3a8a">Branch A: PKCE Local Callback Flow (Primary method for CLI)</text>
+
+  <!-- Y=580 (Admin redirecting Browser) -->
+  <path d="M1400 580 L1000 580" stroke="#0ea5e9" stroke-width="2.5" stroke-dasharray="6 4" fill="none" marker-end="url(#arrow-sky)" />
+  <path d="M1000 580 L200 580" stroke="#0ea5e9" stroke-width="2.5" stroke-dasharray="6 4" fill="none" marker-end="url(#arrow-sky)" />
+  <rect x="1075" y="567" width="250" height="26" class="badge" rx="6" />
+  <text x="1200" y="585" text-anchor="middle" class="path-label" fill="#0369a1">HTTP 302 Redirect to Localhost</text>
+  <rect x="350" y="567" width="300" height="26" class="badge" rx="6" />
+  <text x="500" y="585" text-anchor="middle" class="path-label" fill="#0369a1">Browser follows redirect to 127.0.0.1</text>
+
+  <!-- Y=630 (Browser to CLI Local Server) -->
+  <path d="M200 630 L600 630" stroke="#0ea5e9" stroke-width="2.5" fill="none" marker-end="url(#arrow-sky)" />
+  <rect x="220" y="617" width="360" height="26" class="badge" rx="6" />
+  <text x="400" y="635" text-anchor="middle" class="path-label" fill="#0369a1">GET http://127.0.0.1/callback?code=AUTH_CODE</text>
+
+  <!-- ==================== SPLIT B: DEVICE CODE (FALLBACK / MCP) ==================== -->
+  <text x="70" y="730" class="box-title" fill="#a16207">Branch B: Device Code Flow (Headless MCP / CLI Port-Binding Fallback)</text>
+
+  <!-- Y=760 (CLI Polls Admin) -->
+  <path d="M600 760 L1000 760" stroke="#ca8a04" stroke-width="2.5" fill="none" marker-end="url(#arrow-yellow)" />
+  <path d="M1000 760 L1400 760" stroke="#ca8a04" stroke-width="2.5" fill="none" marker-end="url(#arrow-yellow)" />
+  <rect x="670" y="747" width="260" height="26" class="badge" rx="6" />
+  <text x="800" y="765" text-anchor="middle" class="path-label" fill="#854d0e">POST /api/v1/admin/auth/ai/poll</text>
+  <rect x="1090" y="747" width="220" height="26" class="badge" rx="6" />
+  <text x="1200" y="765" text-anchor="middle" class="path-label" fill="#854d0e">{ device_code } Loop waits</text>
+
+  <!-- Y=810 (Admin resolves Polling) -->
+  <path d="M1400 810 L1000 810" stroke="#16a34a" stroke-width="2.5" stroke-dasharray="6 4" fill="none" marker-end="url(#arrow-green)" />
+  <path d="M1000 810 L600 810" stroke="#16a34a" stroke-width="2.5" stroke-dasharray="6 4" fill="none" marker-end="url(#arrow-green)" />
+  <rect x="1095" y="797" width="210" height="26" class="badge" rx="6" />
+  <text x="1200" y="815" text-anchor="middle" class="path-label" fill="#15803d">Status responds: APPROVED</text>
+
+  <!-- ==================== FINAL: TOKEN EXCHANGE ==================== -->
+  
+  <!-- Y=900 -->
+  <path d="M600 900 L1000 900" stroke="#2563eb" stroke-width="2.5" fill="none" marker-end="url(#arrow-blue)" />
+  <path d="M1000 900 L1400 900" stroke="#2563eb" stroke-width="2.5" fill="none" marker-end="url(#arrow-blue)" />
+  <rect x="670" y="887" width="260" height="26" class="badge" rx="6" />
+  <text x="800" y="905" text-anchor="middle" class="path-label">POST /api/v1/admin/auth/ai/token</text>
+  <rect x="1035" y="887" width="330" height="26" class="badge" rx="6" />
+  <text x="1200" y="905" text-anchor="middle" class="path-label">Exchanges Branch A code OR Branch B code</text>
+
+  <!-- Y=960 (Return JWT) -->
+  <path d="M1400 960 L1000 960" stroke="#10b981" stroke-width="2.5" stroke-dasharray="6 4" fill="none" marker-end="url(#arrow-emerald)" />
+  <path d="M1000 960 L600 960" stroke="#10b981" stroke-width="2.5" stroke-dasharray="6 4" fill="none" marker-end="url(#arrow-emerald)" />
+  <rect x="1030" y="947" width="340" height="26" class="badge" rx="6" />
+  <text x="1200" y="965" text-anchor="middle" class="path-label" fill="#047857">200 OK (access_token, refresh_token keys)</text>
+
+  <!-- Y=1030 (Authenticated request) -->
+  <path d="M600 1030 L1000 1030" stroke="#14b8a6" stroke-width="2.5" fill="none" marker-end="url(#arrow-teal)" />
+  <rect x="620" y="1017" width="360" height="26" class="badge" rx="6" />
+  <text x="800" y="1035" text-anchor="middle" class="path-label" fill="#0f766e">Subsequent Secure API Calls (Bearer JWT Token)</text>
+
+</svg>
