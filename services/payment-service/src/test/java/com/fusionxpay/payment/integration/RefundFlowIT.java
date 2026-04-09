@@ -8,6 +8,7 @@ import com.fusionxpay.payment.dto.RefundResponse;
 import com.fusionxpay.payment.model.PaymentTransaction;
 import com.fusionxpay.payment.model.RefundStatus;
 import com.fusionxpay.payment.repository.PaymentTransactionRepository;
+import com.fusionxpay.payment.service.IdempotencyService;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,14 +18,17 @@ import org.springframework.http.*;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.awaitility.Awaitility.await;
 
 /**
  * Integration tests for the refund flow.
@@ -42,7 +46,12 @@ public class RefundFlowIT extends AbstractIntegrationTest {
     @Autowired
     private PaymentTransactionRepository paymentTransactionRepository;
 
+    @Autowired
+    private IdempotencyService idempotencyService;
+
     private static final int WIREMOCK_PORT = 8090;
+    private static final String WEBHOOK_SECRET = "whsec_test_mock";
+    private static final String STRIPE_API_VERSION = "2024-10-28.acacia";
 
     @BeforeAll
     static void setupWireMock() {
@@ -227,7 +236,7 @@ public class RefundFlowIT extends AbstractIntegrationTest {
 
     @Test
     @Order(5)
-    @DisplayName("Should handle Stripe refund webhook callback")
+    @DisplayName("Should mark transaction refunded when payment idempotency key is already completed")
     void testRefundFlow_WebhookCallback() {
         // Arrange - Create a successful payment transaction
         UUID orderId = UUID.randomUUID();
@@ -241,10 +250,20 @@ public class RefundFlowIT extends AbstractIntegrationTest {
         transaction.setProviderTransactionId("pi_test_refund_webhook_123");
         paymentTransactionRepository.save(transaction);
 
+        idempotencyService.markAsCompleted(
+                "stripe:webhook:event:payment:order:" + orderId,
+                Duration.ofMinutes(5)
+        );
+
         // Create webhook payload simulating Stripe charge.refunded event
         String webhookPayload = String.format("""
             {
                 "id": "evt_refund_123",
+                "object": "event",
+                "api_version": "%s",
+                "created": 1731111111,
+                "livemode": false,
+                "pending_webhooks": 1,
                 "type": "charge.refunded",
                 "data": {
                     "object": {
@@ -259,11 +278,12 @@ public class RefundFlowIT extends AbstractIntegrationTest {
                     }
                 }
             }
-            """, orderId.toString());
+            """, STRIPE_API_VERSION, orderId.toString());
+        String signature = createValidSignature(webhookPayload);
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.set("Stripe-Signature", "t=1234567890,v1=test_signature");
+        headers.set("Stripe-Signature", signature);
 
         HttpEntity<String> webhookRequest = new HttpEntity<>(webhookPayload, headers);
 
@@ -274,9 +294,12 @@ public class RefundFlowIT extends AbstractIntegrationTest {
                 Void.class
         );
 
-        // Assert - Verify transaction exists
+        // Assert
+        assertThat(webhookResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
         Optional<PaymentTransaction> updatedTransaction = paymentTransactionRepository.findByOrderId(orderId);
         assertThat(updatedTransaction).isPresent();
+        assertThat(updatedTransaction.get().getStatus()).isEqualTo(PaymentStatus.REFUNDED.name());
+        assertThat(updatedTransaction.get().getProviderTransactionId()).isEqualTo("pi_test_refund_webhook_123");
     }
 
     @Test
@@ -316,5 +339,26 @@ public class RefundFlowIT extends AbstractIntegrationTest {
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().getStatus()).isEqualTo(RefundStatus.FAILED);
         assertThat(response.getBody().getErrorMessage()).contains("provider transaction ID");
+    }
+
+    private String createValidSignature(String payload) {
+        long timestamp = Instant.now().getEpochSecond();
+        String signedPayload = timestamp + "." + payload;
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(WEBHOOK_SECRET.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            byte[] digest = mac.doFinal(signedPayload.getBytes(StandardCharsets.UTF_8));
+            return "t=" + timestamp + ",v1=" + toHex(digest);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private String toHex(byte[] bytes) {
+        StringBuilder builder = new StringBuilder(bytes.length * 2);
+        for (byte current : bytes) {
+            builder.append(String.format("%02x", current));
+        }
+        return builder.toString();
     }
 }

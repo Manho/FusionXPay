@@ -164,8 +164,7 @@ public class StripeProvider implements PaymentProvider {
             String eventType = event.getType();
             log.info("Processing Stripe webhook event: {}, id: {}", eventType, eventId);
             
-            // Only process payment status events (success or failure)
-            if (!isPaymentStatusEvent(eventType)) {
+            if (!isHandledWebhookEvent(eventType)) {
                 log.info("Ignoring non-payment status event: {}", eventType);
                 return null;
             }
@@ -183,29 +182,25 @@ public class StripeProvider implements PaymentProvider {
                 return createErrorResponse("Error extracting orderId: " + e.getMessage());
             }
             
-            // Create an order-based Redis key for idempotency
-            String orderKey = STRIPE_WEBHOOK_EVENT_PREFIX + "order:" + orderId;
+            IdempotencyContext idempotencyContext = buildIdempotencyContext(eventType, orderId, eventId);
+            String idempotencyKey = idempotencyContext.key();
             
-            // Check if this order's payment status has already been processed
-            String processingState = idempotencyService.getProcessingState(orderKey);
+            String processingState = idempotencyService.getProcessingState(idempotencyKey);
             
-            if (processingState != null) {
-                if ("completed".equals(processingState)) {
-                    log.info("Payment status for order {} already processed", orderId);
-                    return PaymentResponse.builder()
-                            .status(PaymentStatus.DUPLICATE)
-                            .paymentChannel(getProviderName())
-                            .providerTransactionId(eventId)
-                            .orderId(UUID.fromString(orderId))
-                            .build();
-                } 
+            if ("completed".equals(processingState)) {
+                log.info("Stripe {} event already processed for key {}", idempotencyContext.scope(), idempotencyKey);
+                return PaymentResponse.builder()
+                        .status(PaymentStatus.DUPLICATE)
+                        .paymentChannel(getProviderName())
+                        .providerTransactionId(eventId)
+                        .orderId(UUID.fromString(orderId))
+                        .build();
             }
             
-            // Try to acquire processing lock for this order's payment status
-            boolean lockAcquired = idempotencyService.acquireProcessingLock(orderKey, EVENT_TTL);
+            boolean lockAcquired = idempotencyService.acquireProcessingLock(idempotencyKey, EVENT_TTL);
             
             if (!lockAcquired) {
-                log.warn("Could not acquire processing lock for order {}", orderId);
+                log.warn("Could not acquire processing lock for Stripe {} key {}", idempotencyContext.scope(), idempotencyKey);
                 return PaymentResponse.builder()
                         .status(PaymentStatus.PROCESSING)
                         .paymentChannel(getProviderName())
@@ -240,20 +235,20 @@ public class StripeProvider implements PaymentProvider {
                 
                 // Mark as successfully completed if appropriate
                 if (response != null && response.getStatus() != PaymentStatus.FAILED) {
-                    idempotencyService.markAsCompleted(orderKey, EVENT_TTL);
+                    idempotencyService.markAsCompleted(idempotencyKey, EVENT_TTL);
                 } else if (response == null) {
                     // For events we don't care about, release the lock
-                    idempotencyService.releaseLock(orderKey);
+                    idempotencyService.releaseLock(idempotencyKey);
                 } else {
                     // For failed responses, mark as completed to prevent retries
                     // (we still consider a failed payment as "completed" processing)
-                    idempotencyService.markAsCompleted(orderKey, EVENT_TTL);
+                    idempotencyService.markAsCompleted(idempotencyKey, EVENT_TTL);
                 }
                 
                 return response;
             } catch (Exception e) {
                 // On any exception, release the lock
-                idempotencyService.releaseLock(orderKey);
+                idempotencyService.releaseLock(idempotencyKey);
                 throw e;
             }
         } catch (SignatureVerificationException e) {
@@ -265,13 +260,30 @@ public class StripeProvider implements PaymentProvider {
         }
     }
 
-    // Helper method to determine if this event affects payment status
-    private boolean isPaymentStatusEvent(String eventType) {
+    private boolean isHandledWebhookEvent(String eventType) {
         return eventType.equals("payment_intent.succeeded") ||
                eventType.equals("payment_intent.payment_failed") ||
                eventType.equals("checkout.session.completed") ||
                eventType.equals("charge.refunded") ||
                eventType.equals("charge.refund.updated");
+    }
+
+    private boolean isRefundEvent(String eventType) {
+        return eventType.equals("charge.refunded") || eventType.equals("charge.refund.updated");
+    }
+
+    private IdempotencyContext buildIdempotencyContext(String eventType, String orderId, String eventId) {
+        if (isRefundEvent(eventType)) {
+            return new IdempotencyContext(
+                    STRIPE_WEBHOOK_EVENT_PREFIX + "refund:event:" + eventId,
+                    "refund"
+            );
+        }
+
+        return new IdempotencyContext(
+                STRIPE_WEBHOOK_EVENT_PREFIX + "payment:order:" + orderId,
+                "payment"
+        );
     }
 
     // Helper method to extract orderId from different event types
@@ -630,5 +642,8 @@ public class StripeProvider implements PaymentProvider {
             log.error("Invalid webhook signature: {}", e.getMessage(), e);
             return false;
         }
+    }
+
+    private record IdempotencyContext(String key, String scope) {
     }
 }
