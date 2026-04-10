@@ -12,7 +12,17 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.util.UUID;
+
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
  * Unit tests for StripeProvider
@@ -33,6 +43,9 @@ public class StripeProviderTest {
 
     private static final String WEBHOOK_SECRET = "whsec_test_secret";
     private static final String API_KEY = "sk_test_key";
+    private static final String STRIPE_API_VERSION = "2024-10-28.acacia";
+    private static final String REFUND_EVENT_ID = "evt_refund_123";
+    private static final UUID ORDER_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
     @BeforeEach
     void setUp() {
@@ -242,30 +255,68 @@ public class StripeProviderTest {
     }
 
     @Test
+    void testProcessCallback_RefundEventUsesIndependentIdempotencyKey() {
+        String payload = refundWebhookPayload(ORDER_ID.toString(), REFUND_EVENT_ID);
+        String signature = createValidSignature(payload);
+
+        when(idempotencyService.getProcessingState(eq("stripe:webhook:event:refund:event:" + REFUND_EVENT_ID)))
+                .thenReturn(null);
+        when(idempotencyService.acquireProcessingLock(eq("stripe:webhook:event:refund:event:" + REFUND_EVENT_ID), eq(java.time.Duration.ofDays(7))))
+                .thenReturn(true);
+
+        PaymentResponse response = stripeProvider.processCallback(payload, signature);
+
+        assertNotNull(response);
+        assertEquals(PaymentStatus.REFUNDED, response.getStatus());
+        assertEquals(ORDER_ID, response.getOrderId());
+        assertEquals("pi_test_refund_webhook_123", response.getProviderTransactionId());
+
+        verify(idempotencyService).getProcessingState(eq("stripe:webhook:event:refund:event:" + REFUND_EVENT_ID));
+        verify(idempotencyService, never()).getProcessingState(eq("stripe:webhook:event:payment:order:" + ORDER_ID));
+        verify(idempotencyService).markAsCompleted(eq("stripe:webhook:event:refund:event:" + REFUND_EVENT_ID), eq(java.time.Duration.ofDays(7)));
+    }
+
+    @Test
+    void testProcessCallback_DuplicateRefundEventReturnsDuplicate() {
+        String payload = refundWebhookPayload(ORDER_ID.toString(), REFUND_EVENT_ID);
+        String signature = createValidSignature(payload);
+
+        when(idempotencyService.getProcessingState(eq("stripe:webhook:event:refund:event:" + REFUND_EVENT_ID)))
+                .thenReturn("completed");
+
+        PaymentResponse response = stripeProvider.processCallback(payload, signature);
+
+        assertNotNull(response);
+        assertEquals(PaymentStatus.DUPLICATE, response.getStatus());
+        assertEquals(ORDER_ID, response.getOrderId());
+        verify(idempotencyService, never()).acquireProcessingLock(eq("stripe:webhook:event:refund:event:" + REFUND_EVENT_ID), eq(java.time.Duration.ofDays(7)));
+    }
+
+    @Test
     void testIsPaymentStatusEvent_PaymentIntentSucceeded() {
         boolean result =
-            ReflectionTestUtils.invokeMethod(stripeProvider, "isPaymentStatusEvent", "payment_intent.succeeded");
+            ReflectionTestUtils.invokeMethod(stripeProvider, "isHandledWebhookEvent", "payment_intent.succeeded");
         assertTrue(result);
     }
 
     @Test
     void testIsPaymentStatusEvent_PaymentIntentFailed() {
         boolean result =
-            ReflectionTestUtils.invokeMethod(stripeProvider, "isPaymentStatusEvent", "payment_intent.payment_failed");
+            ReflectionTestUtils.invokeMethod(stripeProvider, "isHandledWebhookEvent", "payment_intent.payment_failed");
         assertTrue(result);
     }
 
     @Test
     void testIsPaymentStatusEvent_CheckoutSessionCompleted() {
         boolean result =
-            ReflectionTestUtils.invokeMethod(stripeProvider, "isPaymentStatusEvent", "checkout.session.completed");
+            ReflectionTestUtils.invokeMethod(stripeProvider, "isHandledWebhookEvent", "checkout.session.completed");
         assertTrue(result);
     }
 
     @Test
     void testIsPaymentStatusEvent_OtherEvent() {
         boolean result =
-            ReflectionTestUtils.invokeMethod(stripeProvider, "isPaymentStatusEvent", "customer.created");
+            ReflectionTestUtils.invokeMethod(stripeProvider, "isHandledWebhookEvent", "customer.created");
         assertFalse(result);
     }
 
@@ -279,5 +330,52 @@ public class StripeProviderTest {
         assertEquals(PaymentStatus.FAILED, response.getStatus());
         assertEquals("STRIPE", response.getPaymentChannel());
         assertEquals(errorMessage, response.getErrorMessage());
+    }
+
+    private String refundWebhookPayload(String orderId, String eventId) {
+        return """
+            {
+              "id": "%s",
+              "object": "event",
+              "api_version": "%s",
+              "created": 1731111111,
+              "livemode": false,
+              "pending_webhooks": 1,
+              "type": "charge.refunded",
+              "data": {
+                "object": {
+                  "id": "ch_test_123",
+                  "object": "charge",
+                  "refunded": true,
+                  "amount_refunded": 15000,
+                  "payment_intent": "pi_test_refund_webhook_123",
+                  "metadata": {
+                    "orderId": "%s"
+                  }
+                }
+              }
+            }
+            """.formatted(eventId, STRIPE_API_VERSION, orderId);
+    }
+
+    private String createValidSignature(String payload) {
+        long timestamp = Instant.now().getEpochSecond();
+        String signedPayload = timestamp + "." + payload;
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(WEBHOOK_SECRET.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            byte[] digest = mac.doFinal(signedPayload.getBytes(StandardCharsets.UTF_8));
+            return "t=" + timestamp + ",v1=" + toHex(digest);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private String toHex(byte[] bytes) {
+        StringBuilder builder = new StringBuilder(bytes.length * 2);
+        for (byte current : bytes) {
+            builder.append(String.format("%02x", current));
+        }
+        return builder.toString();
     }
 }
