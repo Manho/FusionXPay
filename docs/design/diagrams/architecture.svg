@@ -1,0 +1,232 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="1350" viewBox="0 0 1500 1350">
+  <defs>
+    <style>
+      .title { font: 700 38px 'Segoe UI', Arial, sans-serif; fill: #0f172a; }
+      .box-title { font: 700 18px 'Segoe UI', Arial, sans-serif; fill: #1e293b; }
+      .box-text { font: 500 15px 'Segoe UI', Arial, sans-serif; fill: #334155; }
+      .box-tiny { font: 600 13px 'Segoe UI', Arial, sans-serif; fill: #475569; }
+      .path-label { font: 600 13px 'Segoe UI', Arial, sans-serif; fill: #0f172a; }
+      .group-label { font: 700 15px 'Segoe UI', Arial, sans-serif; letter-spacing: 2px; }
+      
+      .box-external { fill: #f8fafc; stroke: #94a3b8; stroke-width: 2.5px; }
+      .box-ai { fill: #eff6ff; stroke: #3b82f6; stroke-width: 2.5px; }
+      .box-gateway { fill: #f0fdf4; stroke: #22c55e; stroke-width: 2.5px; }
+      .box-service { fill: #fff7ed; stroke: #f97316; stroke-width: 2.5px; }
+      .box-db { fill: #fdf4ff; stroke: #a855f7; stroke-width: 2.5px; }
+      .box-queue { fill: #fefce8; stroke: #eab308; stroke-width: 2.5px; }
+      .box-monitor { fill: #f0fdfa; stroke: #14b8a6; stroke-width: 2.5px; }
+      .box-external-api { fill: #f1f5f9; stroke: #64748b; stroke-width: 2px; stroke-dasharray: 6 4; }
+      .badge { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.5px; }
+    </style>
+    <marker id="arrow-solid" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,1 L8,5 L0,9 z" fill="#334155" />
+    </marker>
+    <marker id="arrow-blue" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,1 L8,5 L0,9 z" fill="#2563eb" />
+    </marker>
+    <marker id="arrow-green" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,1 L8,5 L0,9 z" fill="#16a34a" />
+    </marker>
+    <marker id="arrow-orange" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,1 L8,5 L0,9 z" fill="#ea580c" />
+    </marker>
+    <marker id="arrow-teal" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,1 L8,5 L0,9 z" fill="#14b8a6" />
+    </marker>
+    <marker id="arrow-purple" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,1 L8,5 L0,9 z" fill="#8b5cf6" />
+    </marker>
+  </defs>
+
+  <rect width="1500" height="1350" fill="#ffffff" />
+  <text x="750" y="40" text-anchor="middle" class="title">FusionXPay Architecture</text>
+
+  <!-- ==================== GROUP LABELS (Rendered OUTSIDE dashed boxes top-left) ==================== -->
+  
+  <text x="80" y="60" text-anchor="start" class="group-label" fill="#64748b">EXTERNAL CALLERS</text>
+  <text x="80" y="230" text-anchor="start" class="group-label" fill="#2563eb">AI INTEGRATION LAYER</text>
+  <text x="80" y="400" text-anchor="start" class="group-label" fill="#16a34a">EDGE</text>
+  <text x="80" y="565" text-anchor="start" class="group-label" fill="#ea580c">MICROSERVICES</text>
+  <text x="80" y="830" text-anchor="start" class="group-label" fill="#ca8a04">EVENT STREAMING</text>
+  <text x="80" y="1010" text-anchor="start" class="group-label" fill="#9333ea">DATA TIER</text>
+  <text x="80" y="1180" text-anchor="start" class="group-label" fill="#0f766e">OBSERVABILITY &amp; MONITORING</text>
+
+
+  <!-- ==================== GROUP BOUNDING BOXES ==================== -->
+  
+  <rect x="80" y="70" width="1340" height="130" rx="16" fill="#f8fafc" fill-opacity="0.3" stroke="#94a3b8" stroke-width="2" stroke-dasharray="10 8" />
+  <rect x="80" y="240" width="1340" height="135" rx="16" fill="#eff6ff" fill-opacity="0.3" stroke="#60a5fa" stroke-width="2" stroke-dasharray="10 8" />
+  <rect x="80" y="410" width="1340" height="120" rx="16" fill="#f0fdf4" fill-opacity="0.4" stroke="#4ade80" stroke-width="2" stroke-dasharray="10 8" />
+  <rect x="80" y="575" width="1340" height="160" rx="16" fill="#fff7ed" fill-opacity="0.3" stroke="#fb923c" stroke-width="2" stroke-dasharray="10 8" />
+  <rect x="80" y="840" width="1340" height="130" rx="16" fill="#fefce8" fill-opacity="0.3" stroke="#eab308" stroke-width="2" stroke-dasharray="10 8" />
+  <rect x="80" y="1020" width="1340" height="125" rx="16" fill="#fdf4ff" fill-opacity="0.3" stroke="#c084fc" stroke-width="2" stroke-dasharray="10 8" />
+  <rect x="80" y="1190" width="1340" height="130" rx="16" fill="#f0fdfa" fill-opacity="0.3" stroke="#14b8a6" stroke-width="2" stroke-dasharray="10 8" />
+
+
+  <!-- ==================== BACKGROUND CROSS-CANVAS PATHS ==================== -->
+  
+  <!-- Outer connectivity -->
+  <path d="M260 180 L260 430" stroke="#334155" stroke-width="2.5" fill="none" marker-end="url(#arrow-solid)" />
+  <path d="M680 180 L680 265" stroke="#334155" stroke-width="2.5" stroke-dasharray="6 4" fill="none" marker-end="url(#arrow-solid)" />
+  <path d="M1020 180 L1020 265" stroke="#334155" stroke-width="2.5" stroke-dasharray="6 4" fill="none" marker-end="url(#arrow-solid)" />
+  <path d="M680 355 L680 430" stroke="#2563eb" stroke-width="2.5" fill="none" marker-end="url(#arrow-blue)" />
+  <path d="M1020 355 L1020 430" stroke="#2563eb" stroke-width="2.5" fill="none" marker-end="url(#arrow-blue)" />
+
+  <!-- Gateway Routing -->
+  <path d="M260 520 L260 600" stroke="#16a34a" stroke-width="3" fill="none" marker-end="url(#arrow-green)" />
+  <path d="M540 520 L540 600" stroke="#16a34a" stroke-width="3" fill="none" marker-end="url(#arrow-green)" />
+  <path d="M880 520 L880 600" stroke="#16a34a" stroke-width="3" fill="none" marker-end="url(#arrow-green)" />
+  <path d="M1160 520 L1160 600" stroke="#16a34a" stroke-width="3" fill="none" marker-end="url(#arrow-green)" />
+  
+  <!-- Bypass Lanes -->
+  <!-- Lane 1: Audit -> Kafka -->
+  <path d="M400 520 L400 870" stroke="#eab308" stroke-width="3" fill="none" stroke-dasharray="8 4" marker-end="url(#arrow-solid)" />
+  <!-- Lane 2: Edge -> Redis -->
+  <path d="M720 520 L720 1045" stroke="#a855f7" stroke-width="3" fill="none" stroke-dasharray="8 4" marker-end="url(#arrow-solid)" />
+
+  <!-- Inter-Service Comm -->
+  <path d="M380 640 L420 640" stroke="#8b5cf6" stroke-width="2.5" fill="none" marker-end="url(#arrow-purple)" />
+  <path d="M760 670 L660 670" stroke="#8b5cf6" stroke-width="2.5" fill="none" marker-end="url(#arrow-purple)" />
+
+  <!-- Services to DB -->
+  <path d="M260 710 L260 1045" stroke="#a855f7" stroke-width="2" fill="none" marker-end="url(#arrow-solid)" />
+  <path d="M540 710 L540 1045" stroke="#a855f7" stroke-width="2" fill="none" marker-end="url(#arrow-solid)" />
+  <path d="M910 710 L910 1045" stroke="#a855f7" stroke-width="2" fill="none" marker-end="url(#arrow-solid)" />
+  
+  <!-- Payment -> Stripe -->
+  <path d="M950 710 L950 750" stroke="#475569" stroke-width="2" fill="none" marker-end="url(#arrow-solid)" />
+
+  <!-- Services to Kafka -->
+  <path d="M480 870 L480 710" stroke="#1e293b" stroke-width="2" fill="none" marker-end="url(#arrow-solid)" />
+  <path d="M600 710 L600 870" stroke="#1e293b" stroke-width="2" fill="none" marker-end="url(#arrow-solid)" />
+  <path d="M850 710 L850 870" stroke="#1e293b" stroke-width="2" fill="none" marker-end="url(#arrow-solid)" />
+  <path d="M1160 870 L1160 710" stroke="#1e293b" stroke-width="2" fill="none" marker-end="url(#arrow-solid)" />
+
+  <!-- Kafka to MySQL (Direct sync connection) -->
+  <path d="M460 940 L460 1045" stroke="#a855f7" stroke-width="3" fill="none" marker-end="url(#arrow-solid)" />
+
+
+  <!-- ==================== BADGED PATH LABELS ==================== -->
+  
+  <rect x="327" y="760" width="146" height="26" class="badge" rx="6" />
+  <text x="400" y="777" text-anchor="middle" class="path-label" fill="#ca8a04">PUB platform-audit-log</text>
+
+  <rect x="671" y="760" width="98" height="20" class="badge" rx="6" />
+  <text x="720" y="775" text-anchor="middle" class="path-label" fill="#9333ea">Rate Limits</text>
+
+  <rect x="375" y="630" width="50" height="20" class="badge" rx="6" />
+  <text x="400" y="645" text-anchor="middle" class="path-label" fill="#7c3aed">REST</text>
+
+  <rect x="685" y="660" width="50" height="20" class="badge" rx="6" />
+  <text x="710" y="675" text-anchor="middle" class="path-label" fill="#7c3aed">Feign</text>
+
+  <rect x="370" y="980" width="180" height="20" class="badge" rx="6" />
+  <text x="460" y="995" text-anchor="middle" class="path-label" fill="#a855f7">Kafka Connect (JDBC Sink)</text>
+
+  <rect x="625" y="1165" width="250" height="25" class="badge" rx="6" />
+  <text x="750" y="1182" text-anchor="middle" class="path-label" fill="#0f766e">Collects telemetry across all services</text>
+  
+  <!-- Topic Pub/Sub Labels (placed as clean badges resolving crossing lines dynamically) -->
+  <rect x="460" y="766" width="40" height="20" class="badge" rx="6" />
+  <text x="480" y="780" text-anchor="middle" class="path-label">SUB</text>
+  
+  <rect x="580" y="766" width="40" height="20" class="badge" rx="6" />
+  <text x="600" y="780" text-anchor="middle" class="path-label">PUB</text>
+  
+  <rect x="830" y="766" width="40" height="20" class="badge" rx="6" />
+  <text x="850" y="780" text-anchor="middle" class="path-label">PUB</text>
+  
+  <rect x="1140" y="766" width="40" height="20" class="badge" rx="6" />
+  <text x="1160" y="780" text-anchor="middle" class="path-label">SUB</text>
+
+
+  <!-- ==================== CORE BOXES & ENTITIES ==================== -->
+  
+  <!-- LAYER 1 -->
+  <rect x="140" y="90" width="240" height="90" rx="12" class="box-external" />
+  <text x="260" y="132" text-anchor="middle" class="box-title">Web Clients</text>
+  <text x="260" y="155" text-anchor="middle" class="box-tiny">Frontend interactions</text>
+
+  <rect x="500" y="90" width="700" height="90" rx="12" class="box-external" />
+  <text x="850" y="132" text-anchor="middle" class="box-title">AI Agents &amp; Workflows</text>
+  <text x="850" y="155" text-anchor="middle" class="box-tiny">Claude Code, Codex, etc.</text>
+
+
+  <!-- LAYER 2 -->
+  <rect x="530" y="265" width="300" height="90" rx="12" class="box-ai" />
+  <text x="680" y="303" text-anchor="middle" class="box-title" fill="#1e3a8a">MCP Server</text>
+  <text x="680" y="323" text-anchor="middle" class="box-text">Model Context Protocol</text>
+  <text x="680" y="343" text-anchor="middle" class="box-tiny">Injects ToolAuditAspect</text>
+
+  <rect x="870" y="265" width="300" height="90" rx="12" class="box-ai" />
+  <text x="1020" y="303" text-anchor="middle" class="box-title" fill="#1e3a8a">AI CLI Tool</text>
+  <text x="1020" y="323" text-anchor="middle" class="box-text">Terminal Automation</text>
+  <text x="1020" y="343" text-anchor="middle" class="box-tiny">Injects ExecutionStrategy</text>
+
+
+  <!-- LAYER 3 -->
+  <rect x="120" y="430" width="1260" height="90" rx="16" class="box-gateway" />
+  <text x="750" y="465" text-anchor="middle" class="box-title" fill="#14532d">API Gateway</text>
+  <text x="750" y="485" text-anchor="middle" class="box-text">Ingress Routing • JWT Auth • Validation • X-Audit-* Ingress Filtering</text>
+  <text x="750" y="505" text-anchor="middle" class="box-tiny">Emits PlatformAuditEvent universally</text>
+
+
+  <!-- LAYER 4 (MICROSERVICES) -->
+  <rect x="140" y="600" width="240" height="110" rx="16" class="box-service" />
+  <text x="260" y="640" text-anchor="middle" class="box-title">Admin Service</text>
+  <text x="260" y="665" text-anchor="middle" class="box-text">Merchants Setup</text>
+  <text x="260" y="685" text-anchor="middle" class="box-tiny">AI OAuth Approvals</text>
+
+  <rect x="420" y="600" width="240" height="110" rx="16" class="box-service" />
+  <text x="540" y="640" text-anchor="middle" class="box-title">Order Service</text>
+  <text x="540" y="665" text-anchor="middle" class="box-text">Order Lifecycle</text>
+  <text x="540" y="685" text-anchor="middle" class="box-tiny">Merchant Isolation</text>
+
+  <rect x="760" y="600" width="240" height="110" rx="16" class="box-service" />
+  <text x="880" y="640" text-anchor="middle" class="box-title">Payment Service</text>
+  <text x="880" y="665" text-anchor="middle" class="box-text">Provider Connect</text>
+  <text x="880" y="685" text-anchor="middle" class="box-tiny">Refunds &amp; Callbacks</text>
+
+  <rect x="1040" y="600" width="240" height="110" rx="16" class="box-service" />
+  <text x="1160" y="640" text-anchor="middle" class="box-title">Notification Service</text>
+  <text x="1160" y="665" text-anchor="middle" class="box-text">Async Alerts</text>
+  <text x="1160" y="685" text-anchor="middle" class="box-tiny">Merchant Dispatch</text>
+
+  <!-- External API (Stripe) -->
+  <rect x="900" y="750" width="100" height="60" rx="8" class="box-external-api" />
+  <text x="950" y="785" text-anchor="middle" class="box-text">Stripe/Paypal</text>
+
+
+  <!-- LAYER 5: Event Bus (Kafka) -->
+  <rect x="300" y="870" width="1100" height="70" rx="12" class="box-queue" />
+  
+  <!-- Text centered with a perfect fill mask to keep the background lines hidden underneath it -->
+  <rect x="710" y="875" width="280" height="40" fill="#fefce8" />
+  <text x="850" y="895" text-anchor="middle" class="box-title" fill="#a16207">Apache Kafka Broker</text>
+  <text x="850" y="915" text-anchor="middle" class="box-tiny" fill="#a16207">payment, order, audit topics</text>
+
+
+  <!-- LAYER 6: Data Tier -->
+  <rect x="105" y="1045" width="550" height="80" rx="16" class="box-db" />
+  <text x="380" y="1080" text-anchor="middle" class="box-title" fill="#6b21a8">MySQL</text>
+  <text x="380" y="1100" text-anchor="middle" class="box-text" fill="#6b21a8">Core Database &amp; platform_audit_log (JDBC Sync)</text>
+
+  <rect x="695" y="1045" width="550" height="80" rx="16" class="box-db" />
+  <text x="970" y="1080" text-anchor="middle" class="box-title" fill="#6b21a8">Redis</text>
+  <text x="970" y="1100" text-anchor="middle" class="box-text" fill="#6b21a8">Caching &amp; Distributed Rate Limits</text>
+
+
+  <!-- LAYER 7: Observability Stack (Stretched Full Width) -->
+  <rect x="140" y="1215" width="300" height="80" rx="12" class="box-monitor" />
+  <text x="290" y="1250" text-anchor="middle" class="box-title" fill="#0f766e">Prometheus</text>
+  <text x="290" y="1270" text-anchor="middle" class="box-tiny" fill="#0f766e">Distributed Metrics Scraper</text>
+
+  <rect x="600" y="1215" width="300" height="80" rx="12" class="box-monitor" />
+  <text x="750" y="1250" text-anchor="middle" class="box-title" fill="#0f766e">Grafana</text>
+  <text x="750" y="1270" text-anchor="middle" class="box-tiny" fill="#0f766e">UI Dashboards</text>
+
+  <rect x="1060" y="1215" width="300" height="80" rx="12" class="box-monitor" />
+  <text x="1210" y="1250" text-anchor="middle" class="box-title" fill="#0f766e">Loki &amp; Promtail</text>
+  <text x="1210" y="1270" text-anchor="middle" class="box-tiny" fill="#0f766e">Daemonset Log Aggregator</text>
+
+</svg>
