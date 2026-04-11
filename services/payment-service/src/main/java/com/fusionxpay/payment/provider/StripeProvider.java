@@ -2,8 +2,10 @@ package com.fusionxpay.payment.provider;
 
 import com.fusionxpay.payment.dto.PaymentRequest;
 import com.fusionxpay.payment.dto.PaymentResponse;
+import com.fusionxpay.payment.dto.RefundResponse;
 import com.fusionxpay.payment.service.IdempotencyService;
 import com.fusionxpay.common.model.PaymentStatus;
+import com.fusionxpay.payment.model.RefundStatus;
 import com.stripe.Stripe;
 import com.stripe.exception.SignatureVerificationException;
 import com.stripe.exception.StripeException;
@@ -541,12 +543,31 @@ public class StripeProvider implements PaymentProvider {
     /**
      * Processes a refund for a Stripe payment.
      *
+     * @param refundRequest the provider refund request
+     * @return refund response with refund details
+     */
+    @Override
+    public RefundResponse processRefund(ProviderRefundRequest refundRequest) {
+        if (refundRequest.getCurrency() != null) {
+            log.debug("Ignoring refund currency {} for Stripe payment intent {}; Stripe derives currency from the PaymentIntent",
+                    refundRequest.getCurrency(), refundRequest.getProviderTransactionId());
+        }
+        return processRefund(
+                refundRequest.getProviderTransactionId(),
+                refundRequest.getAmount(),
+                refundRequest.getReason()
+        );
+    }
+
+    /**
+     * Processes a refund for a Stripe payment.
+     *
      * @param paymentIntentId the Stripe PaymentIntent ID
      * @param amount the amount to refund in the original currency (null for full refund)
      * @param reason the reason for the refund
      * @return refund response with refund details
      */
-    public com.fusionxpay.payment.dto.RefundResponse processRefund(String paymentIntentId, BigDecimal amount, String reason) {
+    private RefundResponse processRefund(String paymentIntentId, BigDecimal amount, String reason) {
         log.info("Processing Stripe refund for PaymentIntent: {}", paymentIntentId);
 
         try {
@@ -573,7 +594,7 @@ public class StripeProvider implements PaymentProvider {
             log.info("Stripe refund processed. PaymentIntentId: {}, RefundId: {}, Status: {}",
                     paymentIntentId, refund.getId(), refund.getStatus());
 
-            return com.fusionxpay.payment.dto.RefundResponse.builder()
+            return RefundResponse.builder()
                     .refundId(UUID.randomUUID().toString())
                     .providerRefundId(refund.getId())
                     .status(mapStripeRefundStatus(refund.getStatus()))
@@ -585,8 +606,8 @@ public class StripeProvider implements PaymentProvider {
 
         } catch (StripeException e) {
             log.error("Error processing Stripe refund for PaymentIntent {}: {}", paymentIntentId, e.getMessage(), e);
-            return com.fusionxpay.payment.dto.RefundResponse.builder()
-                    .status(com.fusionxpay.payment.model.RefundStatus.FAILED)
+            return RefundResponse.builder()
+                    .status(RefundStatus.FAILED)
                     .paymentChannel(getProviderName())
                     .errorMessage("Stripe refund failed: " + e.getMessage())
                     .build();
@@ -614,21 +635,21 @@ public class StripeProvider implements PaymentProvider {
     /**
      * Maps Stripe refund status to internal RefundStatus.
      */
-    private com.fusionxpay.payment.model.RefundStatus mapStripeRefundStatus(String stripeStatus) {
+    private RefundStatus mapStripeRefundStatus(String stripeStatus) {
         if (stripeStatus == null) {
-            return com.fusionxpay.payment.model.RefundStatus.PENDING;
+            return RefundStatus.PENDING;
         }
         switch (stripeStatus) {
             case "succeeded":
-                return com.fusionxpay.payment.model.RefundStatus.COMPLETED;
+                return RefundStatus.COMPLETED;
             case "pending":
-                return com.fusionxpay.payment.model.RefundStatus.PENDING;
+                return RefundStatus.PENDING;
             case "failed":
-                return com.fusionxpay.payment.model.RefundStatus.FAILED;
+                return RefundStatus.FAILED;
             case "canceled":
-                return com.fusionxpay.payment.model.RefundStatus.CANCELLED;
+                return RefundStatus.CANCELLED;
             default:
-                return com.fusionxpay.payment.model.RefundStatus.PROCESSING;
+                return RefundStatus.PROCESSING;
         }
     }
 

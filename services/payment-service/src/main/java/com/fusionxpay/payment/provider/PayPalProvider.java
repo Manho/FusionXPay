@@ -6,7 +6,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fusionxpay.common.model.PaymentStatus;
 import com.fusionxpay.payment.dto.PaymentRequest;
 import com.fusionxpay.payment.dto.PaymentResponse;
+import com.fusionxpay.payment.dto.RefundResponse;
 import com.fusionxpay.payment.dto.paypal.*;
+import com.fusionxpay.payment.model.RefundStatus;
 import com.fusionxpay.payment.service.IdempotencyService;
 import com.fusionxpay.payment.service.PayPalAuthService;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
@@ -20,6 +22,7 @@ import org.springframework.web.client.RestTemplate;
 
 import jakarta.annotation.PostConstruct;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
@@ -327,13 +330,61 @@ public class PayPalProvider implements PaymentProvider {
     /**
      * Processes a refund for a captured PayPal payment.
      *
+     * @param refundRequest the provider refund request
+     * @return refund response
+     */
+    @Override
+    public RefundResponse processRefund(ProviderRefundRequest refundRequest) {
+        try {
+            PayPalRefundResponse paypalResponse = processRefund(
+                    refundRequest.getProviderTransactionId(),
+                    refundRequest.getAmount(),
+                    refundRequest.getCurrency(),
+                    refundRequest.getReason()
+            );
+
+            if (paypalResponse == null) {
+                return RefundResponse.builder()
+                        .status(RefundStatus.FAILED)
+                        .paymentChannel(getProviderName())
+                        .currency(refundRequest.getCurrency())
+                        .errorMessage("PayPal refund failed: empty response")
+                        .createdAt(LocalDateTime.now())
+                        .build();
+            }
+
+            return RefundResponse.builder()
+                    .refundId(UUID.randomUUID().toString())
+                    .providerRefundId(paypalResponse.getId())
+                    .status(mapPayPalRefundStatus(paypalResponse.getStatus()))
+                    .amount(resolveRefundAmount(paypalResponse, refundRequest))
+                    .currency(resolveRefundCurrency(paypalResponse, refundRequest))
+                    .paymentChannel(getProviderName())
+                    .createdAt(LocalDateTime.now())
+                    .build();
+        } catch (Exception e) {
+            log.error("Error processing PayPal refund for capture {}: {}",
+                    refundRequest.getProviderTransactionId(), e.getMessage(), e);
+            return RefundResponse.builder()
+                    .status(RefundStatus.FAILED)
+                    .paymentChannel(getProviderName())
+                    .currency(refundRequest.getCurrency())
+                    .errorMessage("PayPal refund failed: " + e.getMessage())
+                    .createdAt(LocalDateTime.now())
+                    .build();
+        }
+    }
+
+    /**
+     * Processes a refund for a captured PayPal payment.
+     *
      * @param captureId the PayPal capture ID
      * @param amount the amount to refund (null for full refund)
      * @param currency the currency code
      * @param reason the reason for refund
      * @return refund response
      */
-    public PayPalRefundResponse processRefund(String captureId, BigDecimal amount, String currency, String reason) {
+    private PayPalRefundResponse processRefund(String captureId, BigDecimal amount, String currency, String reason) {
         log.info("Processing PayPal refund for capture: {}", captureId);
 
         try {
@@ -589,6 +640,50 @@ public class PayPalProvider implements PaymentProvider {
                 .paymentChannel(getProviderName())
                 .errorMessage(errorMessage)
                 .build();
+    }
+
+    private RefundStatus mapPayPalRefundStatus(String paypalStatus) {
+        if (paypalStatus == null) {
+            return RefundStatus.PENDING;
+        }
+        switch (paypalStatus.toUpperCase()) {
+            case "COMPLETED":
+                return RefundStatus.COMPLETED;
+            case "PENDING":
+                return RefundStatus.PENDING;
+            case "FAILED":
+                return RefundStatus.FAILED;
+            case "CANCELLED":
+                return RefundStatus.CANCELLED;
+            default:
+                return RefundStatus.PROCESSING;
+        }
+    }
+
+    /**
+     * PayPal may omit the amount on full-refund responses. In that case we fall back to the caller-provided amount,
+     * which means the final amount can remain null for full refunds without an explicit amount.
+     */
+    private BigDecimal resolveRefundAmount(PayPalRefundResponse paypalResponse, ProviderRefundRequest refundRequest) {
+        if (paypalResponse.getAmount() != null && paypalResponse.getAmount().getValue() != null) {
+            try {
+                return new BigDecimal(paypalResponse.getAmount().getValue());
+            } catch (NumberFormatException e) {
+                log.warn("Invalid PayPal refund amount format: {}", paypalResponse.getAmount().getValue());
+            }
+        }
+        if (refundRequest.getAmount() == null) {
+            log.debug("PayPal refund response for capture {} did not include an amount; leaving refund amount unset",
+                    refundRequest.getProviderTransactionId());
+        }
+        return refundRequest.getAmount();
+    }
+
+    private String resolveRefundCurrency(PayPalRefundResponse paypalResponse, ProviderRefundRequest refundRequest) {
+        if (paypalResponse.getAmount() != null && paypalResponse.getAmount().getCurrencyCode() != null) {
+            return paypalResponse.getAmount().getCurrencyCode();
+        }
+        return refundRequest.getCurrency();
     }
 
     private String extractFirstCaptureId(PayPalOrderResponse orderResponse) {

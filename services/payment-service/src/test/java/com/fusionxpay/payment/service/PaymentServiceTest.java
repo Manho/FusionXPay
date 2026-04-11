@@ -6,10 +6,12 @@ import com.fusionxpay.payment.config.TestConfig;
 import com.fusionxpay.payment.dto.OrderResponse;
 import com.fusionxpay.payment.dto.PaymentRequest;
 import com.fusionxpay.payment.dto.PaymentResponse;
+import com.fusionxpay.payment.dto.RefundResponse;
 import com.fusionxpay.payment.event.OrderEventProducer;
 import com.fusionxpay.payment.model.PaymentTransaction;
 import com.fusionxpay.payment.provider.PaymentProvider;
 import com.fusionxpay.payment.provider.PaymentProviderFactory;
+import com.fusionxpay.payment.provider.ProviderRefundRequest;
 import com.fusionxpay.payment.repository.PaymentTransactionRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -192,6 +194,11 @@ class PaymentServiceTest {
         }
 
         @Override
+        public RefundResponse processRefund(ProviderRefundRequest refundRequest) {
+            throw new UnsupportedOperationException("Refunds are not implemented in this test stub");
+        }
+
+        @Override
         public PaymentResponse processCallback(String payload, String signature) {
             return null;
         }
@@ -222,6 +229,11 @@ class PaymentServiceTest {
         }
 
         @Override
+        public RefundResponse processRefund(ProviderRefundRequest refundRequest) {
+            throw new UnsupportedOperationException("Refunds are not implemented in this test stub");
+        }
+
+        @Override
         public PaymentResponse processCallback(String payload, String signature) {
             return PaymentResponse.builder()
                     .orderId(orderId)
@@ -245,6 +257,11 @@ class PaymentServiceTest {
         @Override
         public boolean validateCallback(String payload, String signature) {
             return false;
+        }
+
+        @Override
+        public RefundResponse processRefund(ProviderRefundRequest refundRequest) {
+            throw new UnsupportedOperationException("Refunds are not implemented in this test stub");
         }
 
         @Override

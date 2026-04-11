@@ -2,16 +2,21 @@ package com.fusionxpay.payment.provider;
 
 import com.fusionxpay.common.model.PaymentStatus;
 import com.fusionxpay.payment.dto.PaymentResponse;
+import com.fusionxpay.payment.dto.RefundResponse;
 import com.fusionxpay.payment.model.RefundStatus;
+import com.stripe.exception.ApiException;
+import com.stripe.model.Refund;
 import com.fusionxpay.payment.service.IdempotencyService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.math.BigDecimal;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
@@ -20,6 +25,8 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -252,6 +259,59 @@ public class StripeProviderTest {
         RefundStatus result =
             ReflectionTestUtils.invokeMethod(stripeProvider, "mapStripeRefundStatus", (String) null);
         assertEquals(RefundStatus.PENDING, result);
+    }
+
+    @Test
+    void testProcessRefund_Success() throws Exception {
+        ProviderRefundRequest refundRequest = ProviderRefundRequest.builder()
+                .providerTransactionId("pi_test_123")
+                .amount(new BigDecimal("50.00"))
+                .currency("USD")
+                .reason("customer requested refund")
+                .build();
+
+        Refund refund = new Refund();
+        refund.setId("re_123");
+        refund.setStatus("succeeded");
+        refund.setAmount(5000L);
+        refund.setCurrency("usd");
+
+        try (MockedStatic<Refund> refundMock = mockStatic(Refund.class)) {
+            refundMock.when(() -> Refund.create(any(com.stripe.param.RefundCreateParams.class)))
+                    .thenReturn(refund);
+
+            RefundResponse response = stripeProvider.processRefund(refundRequest);
+
+            assertNotNull(response);
+            assertEquals("re_123", response.getProviderRefundId());
+            assertEquals("STRIPE", response.getPaymentChannel());
+            assertEquals(RefundStatus.COMPLETED, response.getStatus());
+            assertEquals(new BigDecimal("50.00"), response.getAmount());
+            assertEquals("USD", response.getCurrency());
+            assertNotNull(response.getRefundId());
+        }
+    }
+
+    @Test
+    void testProcessRefund_FailureReturnsFailedResponse() throws Exception {
+        ProviderRefundRequest refundRequest = ProviderRefundRequest.builder()
+                .providerTransactionId("pi_test_123")
+                .amount(new BigDecimal("50.00"))
+                .reason("customer requested refund")
+                .build();
+
+        try (MockedStatic<Refund> refundMock = mockStatic(Refund.class)) {
+            refundMock.when(() -> Refund.create(any(com.stripe.param.RefundCreateParams.class)))
+                    .thenThrow(new ApiException("Stripe unavailable", null, null, 500, null));
+
+            RefundResponse response = stripeProvider.processRefund(refundRequest);
+
+            assertNotNull(response);
+            assertEquals(RefundStatus.FAILED, response.getStatus());
+            assertEquals("STRIPE", response.getPaymentChannel());
+            assertNull(response.getRefundId());
+            assertTrue(response.getErrorMessage().contains("Stripe refund failed"));
+        }
     }
 
     @Test

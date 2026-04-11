@@ -8,9 +8,11 @@ import com.fusionxpay.payment.client.OrderServiceClient;
 import com.fusionxpay.payment.config.TestConfig;
 import com.fusionxpay.payment.dto.OrderResponse;
 import com.fusionxpay.payment.dto.PaymentRequest;
+import com.fusionxpay.payment.dto.RefundResponse;
 import com.fusionxpay.payment.model.PaymentTransaction;
 import com.fusionxpay.payment.provider.PaymentProvider;
 import com.fusionxpay.payment.provider.PaymentProviderFactory;
+import com.fusionxpay.payment.provider.ProviderRefundRequest;
 import com.fusionxpay.payment.repository.PaymentTransactionRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -248,6 +250,11 @@ class PaymentControllerTest {
         @Override
         public boolean validateCallback(String payload, String signature) {
             return true;
+        }
+
+        @Override
+        public RefundResponse processRefund(ProviderRefundRequest refundRequest) {
+            throw new UnsupportedOperationException("Refunds are not implemented in this test stub");
         }
 
         @Override

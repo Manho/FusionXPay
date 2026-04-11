@@ -1,8 +1,8 @@
 package com.fusionxpay.payment.provider;
 
-import com.fusionxpay.payment.dto.PaymentCallbackRequest;
 import com.fusionxpay.payment.dto.PaymentRequest;
 import com.fusionxpay.payment.dto.PaymentResponse;
+import com.fusionxpay.payment.dto.RefundResponse;
 
 /**
  * Payment Provider interface that defines core functionality required for payment processors
@@ -15,6 +15,14 @@ public interface PaymentProvider {
      * @return payment response containing transaction ID and payment status
      */
     PaymentResponse processPayment(PaymentRequest paymentRequest);
+
+    /**
+     * Process a refund request.
+     *
+     * @param refundRequest provider refund request details
+     * @return refund response containing refund status and provider refund reference
+     */
+    RefundResponse processRefund(ProviderRefundRequest refundRequest);
     
     /**
      * Validate callback signature
