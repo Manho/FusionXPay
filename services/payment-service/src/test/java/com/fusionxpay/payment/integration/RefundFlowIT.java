@@ -77,6 +77,9 @@ public class RefundFlowIT extends AbstractIntegrationTest {
         registry.add("payment.providers.stripe.api-base-url", () -> "http://localhost:" + WIREMOCK_PORT);
         registry.add("payment.providers.stripe.secret-key", () -> "sk_test_mock");
         registry.add("payment.providers.stripe.webhook-secret", () -> "whsec_test_mock");
+        registry.add("payment.providers.paypal.base-url", () -> "http://localhost:" + WIREMOCK_PORT);
+        registry.add("payment.providers.paypal.client-id", () -> "paypal-client-id");
+        registry.add("payment.providers.paypal.client-secret", () -> "paypal-client-secret");
 
         // Disable Eureka for tests
         registry.add("eureka.client.enabled", () -> false);
@@ -88,7 +91,7 @@ public class RefundFlowIT extends AbstractIntegrationTest {
     @DisplayName("Should process full refund successfully")
     void testInitiateRefund_FullRefund_Success() {
         // Arrange - Create a successful payment transaction
-        WireMockConfig.stubStripeRefundSuccess(wireMockServer);
+        stubStripeRefundSuccess("re_test_123", "ch_test_123", "pi_test_refund_123", "usd", 10000);
 
         UUID orderId = UUID.randomUUID();
         PaymentTransaction transaction = new PaymentTransaction();
@@ -121,16 +124,63 @@ public class RefundFlowIT extends AbstractIntegrationTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().getTransactionId()).isEqualTo(saved.getTransactionId().toString());
-        // Status depends on Stripe API mock response
-        assertThat(response.getBody().getStatus()).isIn(RefundStatus.COMPLETED, RefundStatus.PROCESSING, RefundStatus.PENDING, RefundStatus.FAILED);
+        assertThat(response.getBody().getStatus()).isEqualTo(RefundStatus.COMPLETED);
+        assertThat(response.getBody().getProviderRefundId()).isEqualTo("re_test_123");
+        assertThat(response.getBody().getAmount()).isEqualByComparingTo("100.00");
+        assertThat(response.getBody().getCurrency()).isEqualTo("USD");
+        assertThat(response.getBody().getPaymentChannel()).isEqualTo("STRIPE");
     }
 
     @Test
     @Order(2)
+    @DisplayName("Should process PayPal refund successfully")
+    void testInitiateRefund_PayPal_Success() {
+        stubPayPalAccessTokenSuccess();
+        stubPayPalRefundSuccess("CAPTURE-PAYPAL-123", "PAYPAL-REFUND-123", "USD", "50.00");
+
+        UUID orderId = UUID.randomUUID();
+        PaymentTransaction transaction = new PaymentTransaction();
+        transaction.setOrderId(orderId);
+        transaction.setMerchantId(1L);
+        transaction.setAmount(new BigDecimal("100.00"));
+        transaction.setCurrency("USD");
+        transaction.setPaymentChannel("PAYPAL");
+        transaction.setStatus(PaymentStatus.SUCCESS.name());
+        transaction.setProviderTransactionId("CAPTURE-PAYPAL-123");
+        PaymentTransaction saved = paymentTransactionRepository.save(transaction);
+
+        RefundRequest refundRequest = RefundRequest.builder()
+                .transactionId(saved.getTransactionId().toString())
+                .amount(new BigDecimal("50.00"))
+                .reason("Customer requested refund")
+                .build();
+
+        HttpHeaders refundHeaders = new HttpHeaders();
+        refundHeaders.set("X-Merchant-Id", "1");
+        HttpEntity<RefundRequest> refundEntity = new HttpEntity<>(refundRequest, refundHeaders);
+        ResponseEntity<RefundResponse> response = restTemplate.exchange(
+                "/api/v1/payment/refund",
+                HttpMethod.POST,
+                refundEntity,
+                RefundResponse.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getTransactionId()).isEqualTo(saved.getTransactionId().toString());
+        assertThat(response.getBody().getStatus()).isEqualTo(RefundStatus.COMPLETED);
+        assertThat(response.getBody().getProviderRefundId()).isEqualTo("PAYPAL-REFUND-123");
+        assertThat(response.getBody().getAmount()).isEqualByComparingTo("50.00");
+        assertThat(response.getBody().getCurrency()).isEqualTo("USD");
+        assertThat(response.getBody().getPaymentChannel()).isEqualTo("PAYPAL");
+    }
+
+    @Test
+    @Order(3)
     @DisplayName("Should process partial refund successfully")
     void testInitiateRefund_PartialRefund_Success() {
         // Arrange
-        WireMockConfig.stubStripeRefundSuccess(wireMockServer);
+        stubStripeRefundSuccess("re_test_123", "ch_test_partial_123", "pi_test_partial_refund_123", "usd", 5000);
 
         UUID orderId = UUID.randomUUID();
         PaymentTransaction transaction = new PaymentTransaction();
@@ -163,10 +213,16 @@ public class RefundFlowIT extends AbstractIntegrationTest {
         // Assert
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getTransactionId()).isEqualTo(saved.getTransactionId().toString());
+        assertThat(response.getBody().getStatus()).isEqualTo(RefundStatus.COMPLETED);
+        assertThat(response.getBody().getProviderRefundId()).isEqualTo("re_test_123");
+        assertThat(response.getBody().getAmount()).isEqualByComparingTo("50.00");
+        assertThat(response.getBody().getCurrency()).isEqualTo("USD");
+        assertThat(response.getBody().getPaymentChannel()).isEqualTo("STRIPE");
     }
 
     @Test
-    @Order(3)
+    @Order(4)
     @DisplayName("Should fail refund for non-existent transaction")
     void testInitiateRefund_TransactionNotFound() {
         // Arrange
@@ -196,7 +252,7 @@ public class RefundFlowIT extends AbstractIntegrationTest {
     }
 
     @Test
-    @Order(4)
+    @Order(5)
     @DisplayName("Should fail refund for non-refundable transaction status")
     void testInitiateRefund_NonRefundableStatus() {
         // Arrange - Create a transaction that is not in SUCCESS state
@@ -235,7 +291,7 @@ public class RefundFlowIT extends AbstractIntegrationTest {
     }
 
     @Test
-    @Order(5)
+    @Order(6)
     @DisplayName("Should mark transaction refunded when payment idempotency key is already completed")
     void testRefundFlow_WebhookCallback() {
         // Arrange - Create a successful payment transaction
@@ -303,7 +359,7 @@ public class RefundFlowIT extends AbstractIntegrationTest {
     }
 
     @Test
-    @Order(6)
+    @Order(7)
     @DisplayName("Should fail refund when provider transaction ID is missing")
     void testInitiateRefund_MissingProviderTransactionId() {
         // Arrange - Create a transaction without provider transaction ID
@@ -360,5 +416,58 @@ public class RefundFlowIT extends AbstractIntegrationTest {
             builder.append(String.format("%02x", current));
         }
         return builder.toString();
+    }
+
+    private void stubPayPalAccessTokenSuccess() {
+        wireMockServer.stubFor(post(urlEqualTo("/v1/oauth2/token"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("""
+                                {
+                                  "access_token": "paypal-access-token",
+                                  "token_type": "Bearer",
+                                  "expires_in": 32400
+                                }
+                                """)));
+    }
+
+    private void stubPayPalRefundSuccess(String captureId, String refundId, String currency, String amount) {
+        wireMockServer.stubFor(post(urlEqualTo("/v2/payments/captures/" + captureId + "/refund"))
+                .willReturn(aResponse()
+                        .withStatus(201)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("""
+                                {
+                                  "id": "%s",
+                                  "status": "COMPLETED",
+                                  "amount": {
+                                    "currency_code": "%s",
+                                    "value": "%s"
+                                  }
+                                  }
+                                """.formatted(refundId, currency, amount))));
+    }
+
+    private void stubStripeRefundSuccess(String refundId, String chargeId, String paymentIntentId, String currency, long amountInSmallestUnit) {
+        wireMockServer.stubFor(post(urlPathEqualTo("/v1/refunds"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("""
+                                {
+                                  "id": "%s",
+                                  "object": "refund",
+                                  "amount": %d,
+                                  "balance_transaction": "txn_test_123",
+                                  "charge": "%s",
+                                  "created": 1710000000,
+                                  "currency": "%s",
+                                  "metadata": {},
+                                  "payment_intent": "%s",
+                                  "reason": "requested_by_customer",
+                                  "status": "succeeded"
+                                }
+                                """.formatted(refundId, amountInSmallestUnit, chargeId, currency, paymentIntentId))));
     }
 }

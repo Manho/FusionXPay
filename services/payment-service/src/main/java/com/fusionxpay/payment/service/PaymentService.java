@@ -12,10 +12,9 @@ import com.fusionxpay.payment.dto.RefundResponse;
 import com.fusionxpay.payment.event.OrderEventProducer;
 import com.fusionxpay.payment.model.PaymentTransaction;
 import com.fusionxpay.payment.model.RefundStatus;
-import com.fusionxpay.payment.provider.PayPalProvider;
 import com.fusionxpay.payment.provider.PaymentProvider;
 import com.fusionxpay.payment.provider.PaymentProviderFactory;
-import com.fusionxpay.payment.provider.StripeProvider;
+import com.fusionxpay.payment.provider.ProviderRefundRequest;
 import com.fusionxpay.payment.repository.PaymentTransactionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -487,47 +486,12 @@ public class PaymentService {
                     .build();
         }
 
-        // Process refund based on payment channel
         String paymentChannel = transaction.getPaymentChannel();
         RefundResponse refundResponse;
 
         try {
-            if ("STRIPE".equalsIgnoreCase(paymentChannel)) {
-                StripeProvider stripeProvider = (StripeProvider) paymentProviderFactory.getProvider("STRIPE");
-                refundResponse = stripeProvider.processRefund(
-                        providerTransactionId,
-                        refundRequest.getAmount(),
-                        refundRequest.getReason()
-                );
-            } else if ("PAYPAL".equalsIgnoreCase(paymentChannel)) {
-                PayPalProvider payPalProvider = (PayPalProvider) paymentProviderFactory.getProvider("PAYPAL");
-                // For PayPal, we need the capture ID which should be stored in providerTransactionId
-                var paypalResponse = payPalProvider.processRefund(
-                        refundRequest.getCaptureId() != null ? refundRequest.getCaptureId() : providerTransactionId,
-                        refundRequest.getAmount(),
-                        refundRequest.getCurrency() != null ? refundRequest.getCurrency() : transaction.getCurrency(),
-                        refundRequest.getReason()
-                );
-
-                // Map PayPal response to RefundResponse
-                refundResponse = RefundResponse.builder()
-                        .refundId(UUID.randomUUID().toString())
-                        .transactionId(transactionId.toString())
-                        .providerRefundId(paypalResponse.getId())
-                        .status(mapPayPalRefundStatus(paypalResponse.getStatus()))
-                        .amount(refundRequest.getAmount() != null ? refundRequest.getAmount() : transaction.getAmount())
-                        .currency(transaction.getCurrency())
-                        .paymentChannel(paymentChannel)
-                        .createdAt(java.time.LocalDateTime.now())
-                        .build();
-            } else {
-                log.error("Unsupported payment channel for refund: {}", paymentChannel);
-                return RefundResponse.builder()
-                        .status(RefundStatus.FAILED)
-                        .transactionId(transactionId.toString())
-                        .errorMessage("Unsupported payment channel: " + paymentChannel)
-                        .build();
-            }
+            PaymentProvider provider = paymentProviderFactory.getProvider(paymentChannel);
+            refundResponse = provider.processRefund(buildProviderRefundRequest(refundRequest, transaction));
 
             // Do not mark the transaction as REFUNDED here.
             // For both Stripe and PayPal we rely on provider webhooks to confirm refund completion
@@ -537,7 +501,13 @@ public class PaymentService {
             refundResponse.setTransactionId(transactionId.toString());
 
             return refundResponse;
-
+        } catch (IllegalArgumentException e) {
+            log.error("Unsupported payment channel for refund: {}", paymentChannel, e);
+            return RefundResponse.builder()
+                    .status(RefundStatus.FAILED)
+                    .transactionId(transactionId.toString())
+                    .errorMessage("Unsupported payment channel: " + paymentChannel)
+                    .build();
         } catch (Exception e) {
             log.error("Error processing refund for transaction {}: {}", transactionId, e.getMessage(), e);
             return RefundResponse.builder()
@@ -548,25 +518,18 @@ public class PaymentService {
         }
     }
 
-    /**
-     * Maps PayPal refund status to internal RefundStatus.
-     */
-    private RefundStatus mapPayPalRefundStatus(String paypalStatus) {
-        if (paypalStatus == null) {
-            return RefundStatus.PENDING;
-        }
-        switch (paypalStatus.toUpperCase()) {
-            case "COMPLETED":
-                return RefundStatus.COMPLETED;
-            case "PENDING":
-                return RefundStatus.PENDING;
-            case "FAILED":
-                return RefundStatus.FAILED;
-            case "CANCELLED":
-                return RefundStatus.CANCELLED;
-            default:
-                return RefundStatus.PROCESSING;
-        }
+    private ProviderRefundRequest buildProviderRefundRequest(RefundRequest refundRequest, PaymentTransaction transaction) {
+        // `captureId` is kept for legacy PayPal callers; all providers consume the normalized target ID below.
+        String refundTargetId = refundRequest.getCaptureId() != null
+                ? refundRequest.getCaptureId()
+                : transaction.getProviderTransactionId();
+
+        return ProviderRefundRequest.builder()
+                .providerTransactionId(refundTargetId)
+                .amount(refundRequest.getAmount())
+                .currency(refundRequest.getCurrency() != null ? refundRequest.getCurrency() : transaction.getCurrency())
+                .reason(refundRequest.getReason())
+                .build();
     }
 
     private LocalDateTime parseDateBoundary(String rawValue, boolean endOfDay) {
